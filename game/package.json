@@ -1,0 +1,1 @@
+{"name":"world-simulation","private":true,"type":"module","scripts":{"dev":"node server.mjs","test":"node --test test/*.test.mjs"}}
