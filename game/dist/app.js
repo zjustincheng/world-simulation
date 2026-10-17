@@ -5,7 +5,6 @@ import {
   NEUTRAL,
   colors,
   createWorld,
-  tick,
   stats,
   declareWar,
   peace,
@@ -20,6 +19,7 @@ import {
   validate,
 } from "./engine.js";
 import { REAL_MAPS } from "./real-maps.js";
+import { advanceTurn } from "./turns.js";
 import { capitalRegion, generateNationName } from "./names.js";
 import {
   readSaves,
@@ -38,8 +38,6 @@ pixelCanvas.height = H;
 const pixelCtx = pixelCanvas.getContext("2d");
 let world = createWorld("EARTH", 0, "earth"),
   selected = null,
-  running = false,
-  speed = 1,
   layer = "political",
   tool = "inspect";
 let zoom = 1,
@@ -51,8 +49,8 @@ let zoom = 1,
   brush = 3,
   undoSnapshot = null;
 let recoveryPending = null;
+let lastTurn = null;
 let toastTimer,
-  lastTick = performance.now(),
   lastPaint = 0,
   showLabels = true,
   showEffects = true;
@@ -195,6 +193,17 @@ function draw(now = performance.now()) {
         ctx.lineTo(x2, y2);
       }
     ctx.stroke();
+  }
+  if (lastTurn && $("#show-changes").checked) {
+    ctx.lineWidth = 0.28;
+    for (const change of lastTurn.changes) {
+      const x = change.cell % W,
+        y = Math.floor(change.cell / W);
+      ctx.fillStyle = change.from === NEUTRAL ? "#8effb633" : "#ffbf6855";
+      ctx.strokeStyle = change.from === NEUTRAL ? "#a8ffc3" : "#ffd18c";
+      ctx.fillRect(x, y, 1, 1);
+      ctx.strokeRect(x + 0.1, y + 0.1, 0.8, 0.8);
+    }
   }
   if (showEffects) {
     ctx.strokeStyle = "#ffe2a5";
@@ -433,6 +442,7 @@ function refresh({ map = true } = {}) {
     lastPaint = performance.now();
   }
   $("#year").textContent = world.year;
+  $("#review-turn").disabled = !lastTurn;
   $("#nation-count").textContent = counts.filter(Boolean).length;
   $("#war-count").textContent = world.wars.length;
   $("#claimed").textContent =
@@ -530,53 +540,51 @@ $("#nation-detail").onclick = (e) => {
   refresh();
   renderDetail(true);
 };
-function setRunning(value) {
-  running = value;
-  lastTick = performance.now();
-  $("#play").textContent = running ? "Ⅱ Pause" : "▶ Play";
-  $("#simulation-status").textContent = running
-    ? "SIMULATION RUNNING"
-    : "SIMULATION PAUSED";
-  $(".transport").classList.toggle("paused", !running);
-}
-$("#play").onclick = () => {
-  if (!running && !counts.some(Boolean)) {
+function nextTurn() {
+  if (document.querySelector("dialog[open]") || drag || pinch) return;
+  if (!counts.some(Boolean)) {
     setTool(world.preset === "blank" ? "land" : "spawn");
-    toast("Place at least one nation on land before starting.");
+    toast("Place at least one nation before advancing a turn.");
     return;
   }
-  if (!running) setTool("inspect");
-  setRunning(!running);
-};
-$("#step").onclick = () => {
-  setRunning(false);
-  tick(world);
+  setTool("inspect");
+  lastTurn = advanceTurn(world);
   undoSnapshot = null;
   $("#undo").disabled = true;
   refresh();
+  renderTurn();
+  switchPanel("turn");
+  autoSave();
+}
+$("#next-turn").onclick = nextTurn;
+$("#review-turn").onclick = () => {
+  renderTurn();
+  switchPanel("turn");
 };
-$$("[data-speed]").forEach(
-  (b) =>
-    (b.onclick = () => {
-      speed = Number(b.dataset.speed);
-      $$("[data-speed]").forEach((x) => x.classList.toggle("active", x === b));
-    }),
-);
+$("#show-changes").onchange = () => draw();
+function renderTurn() {
+  if (!lastTurn) {
+    $("#turn-report").innerHTML =
+      '<div class="panel-heading"><h2>Your next chapter</h2><p>Place nations or adjust the world, then press Next turn. Each turn resolves one year. Nothing advances while you read or plan.</p></div><div class="turn-empty">◇<p>Events, border changes, and nation gains will appear here.</p></div>';
+    return;
+  }
+  const movers = lastTurn.nations
+    .filter((n) => n.delta !== 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  $("#turn-report").innerHTML =
+    `<div class="eyebrow">YEAR ${lastTurn.year} RESOLVED</div><h2>Turn ${lastTurn.year}</h2><p class="turn-headline">${esc(lastTurn.headline)}</p><div class="turn-totals"><div><strong>${lastTurn.claimed}</strong><span>NEWLY SETTLED</span></div><div><strong>${lastTurn.transferred}</strong><span>CHANGED HANDS</span></div><div><strong>${lastTurn.events.length}</strong><span>EVENTS</span></div></div><h3>THIS TURN'S EVENTS</h3>${lastTurn.events.map((e) => `<article class="turn-event ${["war", "battle", "fall", "hardship"].includes(e.type) ? "conflict" : "peace"}"><span>${esc(e.type.toUpperCase())}</span><p>${esc(e.text)}</p></article>`).join("") || '<p class="setting-note">No major events this year.</p>'}<h3>TERRITORY CHANGES</h3>${movers.map((n) => `<button class="turn-nation" data-turn-nation="${n.id}"><i class="flag" style="background:${n.color}"></i><span>${esc(n.name)}<small>${n.before} → ${n.after} tiles</small></span><b class="${n.delta > 0 ? "gain" : "loss"}">${n.delta > 0 ? "+" : ""}${n.delta}</b></button>`).join("") || '<p class="setting-note">All borders held this turn.</p>'}<p class="setting-note">Green outlines show new settlements; amber marks land that changed hands. Toggle “Changes” above the map to compare. Take your time—nothing moves until the next turn.</p>`;
+}
+$("#turn-report").onclick = (e) => {
+  const b = e.target.closest("[data-turn-nation]");
+  if (b) {
+    setTool("inspect");
+    selectNation(Number(b.dataset.turnNation));
+  }
+};
 function animate(now) {
   if (
-    running &&
-    !document.querySelector("dialog[open]") &&
-    now - lastTick > 500
-  ) {
-    lastTick = now;
-    for (let i = 0; i < speed; i++) tick(world);
-    undoSnapshot = null;
-    $("#undo").disabled = true;
-    refresh();
-  } else if (
-    showEffects &&
-    ((world.flashes?.length && now - lastPaint < 720) ||
-      (pointer && tool !== "inspect"))
+    (showEffects && world.flashes?.length && now - lastPaint < 720) ||
+    (pointer && tool !== "inspect")
   )
     draw(now);
   requestAnimationFrame(animate);
@@ -601,16 +609,15 @@ function setTool(value) {
   $("#spawn-setup").hidden = tool !== "spawn";
   $("#spawn-nation").classList.toggle("primary", tool === "spawn");
   if (tool === "spawn") switchPanel("nations");
-  if (tool !== "inspect") setRunning(false);
   const messages = {
     inspect: "Select a nation to inspect it. Drag to pan · Scroll to zoom",
     spawn:
-      "Click land to spawn nations · Right-drag to pan · Press Play when ready",
+      "Click land to spawn nations · Right-drag to pan · Press Next turn when ready",
     territory:
       selected === null
         ? "Select a nation from the ranking, then paint its territory."
         : `Paint territory for ${world.nations[selected].name}. Escape to inspect.`,
-    land: "Drag to paint land. Time is paused while you edit.",
+    land: "Drag to paint land. Nations act when you press Next turn.",
     water: "Drag to paint sea. Owned territory under the brush is removed.",
     erase: "Drag to remove ownership and leave unclaimed land.",
   };
@@ -624,7 +631,8 @@ $("#start-simulation").onclick = () => {
   if (!counts.some(Boolean))
     return toast("Place at least one nation on land first.");
   setTool("inspect");
-  setRunning(true);
+  renderTurn();
+  switchPanel("turn");
 };
 $$("[data-tool]").forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
 $("#brush").oninput = (e) => {
@@ -881,6 +889,8 @@ $("#effects").onchange = (e) => {
   draw();
 };
 function newView() {
+  lastTurn = null;
+  renderTurn();
   recoveryPending = null;
   $("#recovery-banner").hidden = true;
   selected = null;
@@ -941,7 +951,6 @@ $("#world-form").onsubmit = (e) => {
   $("#new-dialog").close();
   newView();
   const manual = Number(data.get("count")) === 0;
-  setRunning(!manual && data.get("preset") !== "blank");
   if (data.get("preset") === "blank") setTool("land");
   else if (manual) setTool("spawn");
   toast("New world created.");
@@ -954,7 +963,6 @@ function restore(input) {
   recoveryPending = null;
   $("#recovery-banner").hidden = true;
   newView();
-  setRunning(false);
 }
 function renderSaves() {
   try {
@@ -1006,7 +1014,7 @@ $("#save-list").onclick = (e) => {
     if (button.dataset.saveLoad) {
       restore(entry.world);
       $("#saves-dialog").close();
-      toast("World loaded. Press Play to continue.");
+      toast("World loaded. Advance when you are ready.");
     }
     if (button.dataset.saveReplace) {
       saveWorld(localStorage, world, entry.name, id);
@@ -1034,7 +1042,7 @@ function autoSave() {
 }
 $("#resume-recovery").onclick = () => {
   if (recoveryPending) restore(recoveryPending.world);
-  toast("Last session recovered. Press Play to continue.");
+  toast("Last session recovered. Advance when you are ready.");
 };
 $("#dismiss-recovery").onclick = () => {
   recoveryPending = null;
@@ -1080,10 +1088,11 @@ document.addEventListener("keydown", (e) => {
     !/INPUT|SELECT|BUTTON|TEXTAREA/.test(e.target.tagName)
   ) {
     e.preventDefault();
-    $("#play").click();
+    if (!e.repeat) nextTurn();
   }
 });
 refresh();
+renderTurn();
 setTool("spawn");
 try {
   recoveryPending = readRecovery(localStorage);

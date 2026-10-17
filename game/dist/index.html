@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#111820" />
-    <title>World Simulation — Conflict Sandbox</title>
+    <title>World Simulation — Turn-Based Sandbox</title>
     <meta
       name="description"
       content="A living world-war sandbox. Spawn nations, paint maps, forge alliances, and watch borders change."
@@ -39,7 +39,9 @@
             ><button data-layer="diplomacy">Diplomacy</button
             ><button data-layer="terrain">Terrain</button>
           </div>
-          <span id="seed-label"></span
+          <label class="change-toggle"
+            ><input id="show-changes" type="checkbox" checked /> Changes</label
+          ><span id="seed-label"></span
           ><button id="help" title="How to play">?</button>
         </div>
         <div class="canvas-wrap">
@@ -103,20 +105,19 @@
           <div class="year-block">
             <span class="status-dot"></span>
             <div>
-              <small id="simulation-status">SIMULATION RUNNING</small
-              ><strong>Year <span id="year">1</span></strong>
+              <small id="simulation-status">READY FOR YOUR NEXT TURN</small
+              ><strong>Turn <span id="year">1</span></strong>
             </div>
           </div>
           <div class="time-controls">
-            <button id="play" class="primary" title="Play or pause (Space)">
-              Ⅱ Pause</button
-            ><button id="step" title="Advance one year">↦</button>
-            <div class="speeds">
-              <button class="active" data-speed="1">1×</button
-              ><button data-speed="3">3×</button
-              ><button data-speed="10">10×</button
-              ><button data-speed="30">30×</button>
-            </div>
+            <button id="review-turn" disabled>Turn report</button
+            ><button
+              id="next-turn"
+              class="primary"
+              title="Resolve one year (Space)"
+            >
+              Next turn →
+            </button>
           </div>
           <button
             id="world-war"
@@ -132,6 +133,7 @@
           <button class="active" data-panel="nations">
             Nations <span id="list-count"></span></button
           ><button data-panel="history">History</button
+          ><button data-panel="turn">Turn</button
           ><button data-panel="wars">Wars</button
           ><button data-panel="settings">Settings</button>
         </nav>
@@ -142,7 +144,7 @@
             <p>
               Leave the name blank to name it after its capital region. Hover
               over land for a preview, then click to place it. Keep placing
-              countries, then start the simulation.
+              countries, then finish setup and advance one turn at a time.
             </p>
             <label
               >Nation name
@@ -169,7 +171,7 @@
             <div class="actions">
               <button id="undo-spawn" disabled>↶ Undo placement</button
               ><button id="start-simulation" class="primary">
-                ▶ Start simulation
+                Finish setup →
               </button>
             </div>
             <p class="setting-note">
@@ -203,6 +205,9 @@
             <p>Wars, revolutions, and the fall of nations.</p>
           </div>
           <div id="events"></div>
+        </section>
+        <section id="panel-turn" class="panel" hidden>
+          <div id="turn-report"></div>
         </section>
         <section id="panel-wars" class="panel" hidden>
           <div class="panel-heading">
@@ -397,15 +402,16 @@
         </li>
         <li>
           <b>Map editor:</b> place nations and paint land, sea, or ownership.
-          Painting pauses time. Undo restores the last stroke.
+          Time only advances when you press Next turn. Undo restores the last
+          stroke.
         </li>
         <li>
           <b>Diplomacy map:</b> green marks allies, red marks enemies of your
           selected nation.
         </li>
         <li>
-          <b>Navigation:</b> drag to pan, scroll to zoom. Space pauses. Escape
-          returns to Inspect.
+          <b>Navigation:</b> drag to pan, scroll to zoom. Space advances one
+          turn. Escape returns to Inspect.
         </li>
       </ul>
       <button id="close-help" class="primary full">Let history unfold</button>

@@ -1440,3 +1440,158 @@ dialog label > select {
     font-size: 11px;
   }
 }
+#next-turn {
+  min-width: 135px;
+  padding: 12px 20px;
+  font-size: 13px;
+}
+#review-turn {
+  font-size: 11px;
+}
+.change-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.change-toggle input {
+  accent-color: var(--accent);
+}
+#turn-report > h2 {
+  font-size: 28px;
+  font-weight: 500;
+  margin: 12px 0;
+}
+.turn-headline {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #d8e3eb;
+}
+.turn-totals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  border-block: 1px solid var(--line);
+  padding: 18px 0;
+  margin: 20px 0;
+}
+.turn-totals strong {
+  display: block;
+  font-size: 22px;
+  font-weight: 500;
+  color: var(--accent);
+}
+.turn-totals span {
+  font-size: 7px;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+  display: block;
+  margin-top: 6px;
+}
+.turn-event {
+  border-left: 2px solid var(--accent);
+  padding: 10px 13px;
+  margin-bottom: 12px;
+  background: #ffffff03;
+}
+.turn-event.conflict {
+  border-color: #ed827e;
+}
+.turn-event > span {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--muted);
+}
+.turn-event p {
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 6px 0;
+  color: #c2d0da;
+}
+.turn-nation {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  text-align: left;
+  gap: 9px;
+  margin: 7px 0;
+  padding: 12px 9px;
+  font-size: 11px;
+}
+.turn-nation > span {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.turn-nation small {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.turn-nation b {
+  font-weight: 500;
+}
+.gain {
+  color: var(--accent);
+}
+.loss {
+  color: var(--red);
+}
+.turn-empty {
+  text-align: center;
+  padding: 28px 8px;
+  font-size: 40px;
+  color: var(--accent);
+}
+.turn-empty p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.panel-tabs {
+  padding: 0 5px;
+}
+.panel-tabs button {
+  font-size: 9px;
+  padding-inline: 3px;
+}
+.year-block small {
+  letter-spacing: 0.7px;
+  font-size: 7px;
+}
+@media (max-width: 650px) {
+  #next-turn {
+    min-width: 105px;
+    font-size: 12px;
+    padding: 10px 12px;
+  }
+  #review-turn {
+    font-size: 9px;
+    padding: 9px 7px;
+  }
+  .map-top .change-toggle {
+    font-size: 8px;
+    margin-left: 2px;
+  }
+  .map-top {
+    gap: 4px;
+  }
+  #world-war {
+    display: none;
+  }
+  .year-block {
+    min-width: 87px;
+  }
+  .year-block small {
+    font-size: 6px;
+    max-width: 85px;
+  }
+  .panel-tabs button {
+    font-size: 11px;
+  }
+  .map-top #help {
+    margin-left: auto;
+  }
+}
