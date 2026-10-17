@@ -34,6 +34,13 @@
     <main>
       <section class="battlefield" aria-label="World map and controls">
         <div class="map-top">
+          <button
+            id="sound-toggle"
+            aria-pressed="true"
+            title="Toggle sound effects"
+          >
+            Sound on
+          </button>
           <div class="map-tabs" aria-label="Map mode">
             <button class="active" data-layer="political">Political</button
             ><button data-layer="diplomacy">Diplomacy</button
@@ -106,15 +113,21 @@
             <span class="status-dot"></span>
             <div>
               <small id="simulation-status">READY FOR YOUR NEXT TURN</small
-              ><strong>Turn <span id="year">1</span></strong>
+              ><strong>Year <span id="year">1</span></strong>
             </div>
           </div>
           <div class="time-controls">
-            <button id="review-turn" disabled>Turn report</button
+            <label class="turn-length"
+              >Years / turn<select id="turn-years">
+                <option value="1">1 year</option>
+                <option value="5" selected>5 years</option>
+                <option value="10">10 years</option>
+              </select></label
+            ><button id="review-turn" disabled>Turn report</button
             ><button
               id="next-turn"
               class="primary"
-              title="Resolve one year (Space)"
+              title="Resolve the selected number of years (Space)"
             >
               Next turn →
             </button>
@@ -139,7 +152,25 @@
         </nav>
         <section id="panel-nations" class="panel">
           <section id="spawn-setup" hidden>
-            <div class="eyebrow">PLACE YOUR NATIONS</div>
+            <div class="auto-setup">
+              <div class="eyebrow">LET THE WORLD TAKE SHAPE</div>
+              <h2>Let the game place countries.</h2>
+              <p>
+                Scatter new capitals across unclaimed land on this map. Existing
+                countries stay yours.
+              </p>
+              <label
+                >Countries to add<select id="auto-count">
+                  <option value="6">6 countries</option>
+                  <option value="12" selected>12 countries</option>
+                  <option value="24">24 countries</option>
+                  <option value="32">32 countries</option>
+                </select></label
+              ><button id="auto-place" class="primary full">
+                ✦ Place countries for me
+              </button>
+            </div>
+            <div class="eyebrow">OR PLACE YOUR OWN</div>
             <h2>Choose a home on the map.</h2>
             <p>
               Leave the name blank to name it after its capital region. Hover

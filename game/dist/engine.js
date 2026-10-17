@@ -292,7 +292,11 @@ export function declareWar(s, a, b, { force = true } = {}) {
   s.wars.push([...pair(a, b), s.year]);
   s.warStats ||= {};
   s.warStats[pair(a, b).join(",")] = [0, 0];
-  log(s, `${s.nations[a].name} declares war on ${s.nations[b].name}.`, "war");
+  log(
+    s,
+    `${s.nations[a].name} declares war on ${s.nations[b].name}. Envoys leave empty-handed as troops assemble along the frontier. The coming years will test both treasuries and armies.`,
+    "war",
+  );
   return true;
 }
 export function peace(s, a, b = null) {
@@ -397,7 +401,11 @@ export function rebel(s, a) {
     Math.floor((old.population * taken) / cells.length),
   );
   old.population -= s.nations[id].population;
-  log(s, `${s.nations[id].name} rebels against ${old.name}.`, "birth");
+  log(
+    s,
+    `${s.nations[id].name} rebels against ${old.name}. A new banner rises over the breakaway capital. The uprising has become a country, and its former rulers must decide its fate on the battlefield.`,
+    "birth",
+  );
   reconcile(s);
   declareWar(s, id, a);
   return true;
@@ -521,7 +529,7 @@ function capture(s, cell, winner, loser, budget) {
       s.nations[winner].wealth = Math.min(99999, s.nations[winner].wealth + 50);
       log(
         s,
-        `${s.nations[winner].name} captures the capital of ${s.nations[loser].name}.`,
+        `${s.nations[winner].name} captures the capital of ${s.nations[loser].name}. The defending government loses its seat of power. The victors seize 50 gold while their rival suffers a blow to stability.`,
         "battle",
       );
     }

@@ -19,6 +19,8 @@ import {
   validate,
 } from "./engine.js";
 import { REAL_MAPS } from "./real-maps.js";
+import { populateWorld } from "./setup.js";
+import { createSound } from "./sound.js";
 import { advanceTurn } from "./turns.js";
 import { capitalRegion, generateNationName } from "./names.js";
 import {
@@ -540,6 +542,33 @@ $("#nation-detail").onclick = (e) => {
   refresh();
   renderDetail(true);
 };
+const sound = createSound();
+function renderSound() {
+  $("#sound-toggle").textContent = sound.enabled ? "Sound on" : "Sound off";
+  $("#sound-toggle").setAttribute("aria-pressed", String(sound.enabled));
+}
+renderSound();
+$("#sound-toggle").onclick = () => {
+  sound.toggle();
+  renderSound();
+};
+$("#auto-place").onclick = () => {
+  const before = structuredClone(world);
+  const added = populateWorld(world, Number($("#auto-count").value));
+  if (!added)
+    return toast(
+      "No room for more countries. Paint land or free territory first.",
+    );
+  undoSnapshot = before;
+  $("#undo").disabled = false;
+  lastTurn = null;
+  refresh();
+  renderTurn();
+  sound.play("settle");
+  toast(
+    `${added} countries placed. Advance a turn to see their stories unfold.`,
+  );
+};
 function nextTurn() {
   if (document.querySelector("dialog[open]") || drag || pinch) return;
   if (!counts.some(Boolean)) {
@@ -548,7 +577,13 @@ function nextTurn() {
     return;
   }
   setTool("inspect");
-  lastTurn = advanceTurn(world);
+  lastTurn = advanceTurn(world, Number($("#turn-years").value));
+  sound.play(
+    lastTurn.transferred ||
+      lastTurn.events.some((e) => ["war", "fall", "battle"].includes(e.type))
+      ? "conflict"
+      : "turn",
+  );
   undoSnapshot = null;
   $("#undo").disabled = true;
   refresh();
@@ -565,14 +600,14 @@ $("#show-changes").onchange = () => draw();
 function renderTurn() {
   if (!lastTurn) {
     $("#turn-report").innerHTML =
-      '<div class="panel-heading"><h2>Your next chapter</h2><p>Place nations or adjust the world, then press Next turn. Each turn resolves one year. Nothing advances while you read or plan.</p></div><div class="turn-empty">◇<p>Events, border changes, and nation gains will appear here.</p></div>';
+      '<div class="panel-heading"><h2>Your next chapter</h2><p>Place nations or adjust the world, then press Next turn. Choose 1, 5, or 10 years per turn; five is the default. Nothing advances while you read or plan.</p></div><div class="turn-empty">◇<p>Events, border changes, and nation gains will appear here.</p></div>';
     return;
   }
   const movers = lastTurn.nations
     .filter((n) => n.delta !== 0)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   $("#turn-report").innerHTML =
-    `<div class="eyebrow">YEAR ${lastTurn.year} RESOLVED</div><h2>Turn ${lastTurn.year}</h2><p class="turn-headline">${esc(lastTurn.headline)}</p><div class="turn-totals"><div><strong>${lastTurn.claimed}</strong><span>NEWLY SETTLED</span></div><div><strong>${lastTurn.transferred}</strong><span>CHANGED HANDS</span></div><div><strong>${lastTurn.events.length}</strong><span>EVENTS</span></div></div><h3>THIS TURN'S EVENTS</h3>${lastTurn.events.map((e) => `<article class="turn-event ${["war", "battle", "fall", "hardship"].includes(e.type) ? "conflict" : "peace"}"><span>${esc(e.type.toUpperCase())}</span><p>${esc(e.text)}</p></article>`).join("") || '<p class="setting-note">No major events this year.</p>'}<h3>TERRITORY CHANGES</h3>${movers.map((n) => `<button class="turn-nation" data-turn-nation="${n.id}"><i class="flag" style="background:${n.color}"></i><span>${esc(n.name)}<small>${n.before} → ${n.after} tiles</small></span><b class="${n.delta > 0 ? "gain" : "loss"}">${n.delta > 0 ? "+" : ""}${n.delta}</b></button>`).join("") || '<p class="setting-note">All borders held this turn.</p>'}<p class="setting-note">Green outlines show new settlements; amber marks land that changed hands. Toggle “Changes” above the map to compare. Take your time—nothing moves until the next turn.</p>`;
+    `<div class="eyebrow">${lastTurn.years}-YEAR CHAPTER</div><h2>${lastTurn.years === 1 ? `Year ${lastTurn.year}` : `Years ${lastTurn.startYear + 1}–${lastTurn.year}`}</h2><p class="turn-headline">${esc(lastTurn.headline.split(". ")[0])}</p><div class="turn-totals"><div><strong>${lastTurn.claimed}</strong><span>NEWLY SETTLED</span></div><div><strong>${lastTurn.transferred}</strong><span>CHANGED HANDS</span></div><div><strong>${lastTurn.events.length}</strong><span>EVENTS</span></div></div><h3>THIS TURN'S EVENTS</h3>${lastTurn.events.map((e) => `<article class="turn-event ${["war", "battle", "fall", "hardship"].includes(e.type) ? "conflict" : "peace"}"><span>YEAR ${e.year} · ${esc(e.type.toUpperCase())}</span><h4>${esc(e.text.split(". ")[0])}</h4><p>${esc(e.text.split(". ").slice(1).join(". ") || "A new chapter in the history of this world.")}</p></article>`).join("") || '<p class="setting-note">No major events in this chapter.</p>'}<h3>TERRITORY CHANGES</h3>${movers.map((n) => `<button class="turn-nation" data-turn-nation="${n.id}"><i class="flag" style="background:${n.color}"></i><span>${esc(n.name)}<small>${n.before} → ${n.after} tiles</small></span><b class="${n.delta > 0 ? "gain" : "loss"}">${n.delta > 0 ? "+" : ""}${n.delta}</b></button>`).join("") || '<p class="setting-note">All borders held this turn.</p>'}<p class="setting-note">Green outlines show new settlements; amber marks land that changed hands. Toggle “Changes” above the map to compare. Take your time—nothing moves until the next turn.</p>`;
 }
 $("#turn-report").onclick = (e) => {
   const b = e.target.closest("[data-turn-nation]");

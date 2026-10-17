@@ -1595,3 +1595,62 @@ dialog label > select {
     margin-left: auto;
   }
 }
+.auto-setup {
+  padding: 18px;
+  margin-bottom: 24px;
+  border: 1px solid #426c63;
+  border-radius: 10px;
+  background: #223a3d;
+}
+.auto-setup h2 {
+  font-size: 20px;
+}
+.auto-setup p {
+  line-height: 1.6;
+}
+.auto-setup button {
+  margin-top: 12px;
+}
+.turn-length {
+  font-size: 9px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.turn-length select {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+.turn-event h4 {
+  font-size: 15px;
+  line-height: 1.4;
+  margin: 8px 0;
+  color: #f0e3c6;
+}
+.turn-event p {
+  line-height: 1.8;
+}
+#sound-toggle {
+  font-size: 10px;
+  padding: 8px;
+  white-space: nowrap;
+}
+@media (max-width: 650px) {
+  #review-turn {
+    display: none;
+  }
+  .time-controls {
+    gap: 6px;
+  }
+  #next-turn {
+    min-width: 100px;
+  }
+  #sound-toggle {
+    font-size: 9px;
+    padding: 6px;
+  }
+  .map-toolbar {
+    gap: 4px;
+  }
+}
