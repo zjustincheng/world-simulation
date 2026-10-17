@@ -474,11 +474,54 @@ export function paint(s, cell, radius, mode, nation = null) {
   reconcile(s);
   return changed;
 }
+export const MAX_SEA_CROSSING = 4;
+// Find the closest shore through water only. Land blocks the route, and the
+// search never wraps map edges or treats a straight line over land as a voyage.
+export function nearbySeaLandings(s, nation, target = NEUTRAL, origins = null) {
+  const coast =
+    origins ||
+    s.owner.map((id, i) => (id === nation ? i : -1)).filter((i) => i >= 0);
+  const seen = new Set(),
+    queue = [],
+    results = new Set();
+  for (const origin of coast) {
+    if (s.owner[origin] !== nation) continue;
+    for (const cell of neighbors(origin)) {
+      if (s.owner[cell] === WATER && !seen.has(cell)) {
+        seen.add(cell);
+        queue.push([cell, 1]);
+      }
+    }
+  }
+  let closest = MAX_SEA_CROSSING + 1;
+  for (let head = 0; head < queue.length; head++) {
+    const [cell, waterTiles] = queue[head];
+    if (waterTiles > closest) break;
+    for (const next of neighbors(cell)) {
+      const owner = s.owner[next];
+      if (owner === WATER) {
+        if (
+          waterTiles < MAX_SEA_CROSSING &&
+          waterTiles < closest &&
+          !seen.has(next)
+        ) {
+          seen.add(next);
+          queue.push([next, waterTiles + 1]);
+        }
+      } else if (
+        target === null ? owner >= 0 && owner !== nation : owner === target
+      ) {
+        closest = waterTiles;
+        results.add(next);
+      }
+    }
+  }
+  return [...results];
+}
 function frontiers(s) {
   const expansion = [],
     borders = new Map(),
-    coasts = Array.from({ length: s.nations.length }, () => []),
-    neutralCoasts = [];
+    coasts = Array.from({ length: s.nations.length }, () => []);
   for (let i = 0; i < s.owner.length; i++) {
     const a = s.owner[i];
     if (a === WATER) continue;
@@ -495,10 +538,9 @@ function frontiers(s) {
     }
     if (coast) {
       if (a >= 0) coasts[a].push(i);
-      else neutralCoasts.push(i);
     }
   }
-  return { expansion, borders, coasts, neutralCoasts };
+  return { expansion, borders, coasts };
 }
 function capture(s, cell, winner, loser, budget) {
   const queue = [cell],
@@ -538,7 +580,7 @@ export function tick(s) {
   s.flashes = [];
   const before = stats(s);
   if (!s.settings.ai) return;
-  const { expansion, borders, coasts, neutralCoasts } = frontiers(s);
+  const { expansion, borders, coasts } = frontiers(s);
   if (s.settings.expansion) {
     // Shuffle frontier attempts so nations act together, without giving low IDs first choice.
     for (let k = expansion.length - 1; k > 0; k--) {
@@ -549,14 +591,11 @@ export function tick(s) {
       if (s.owner[i] >= 0 && s.owner[j] === NEUTRAL && random(s) < 0.58)
         s.owner[j] = s.owner[i];
     }
-    if (s.year % 6 === 0 && neutralCoasts.length)
+    if (s.year % 6 === 0)
       for (const n of s.nations)
         if (before[n.id] && coasts[n.id].length && random(s) < 0.22) {
-          const origin = pick(s, coasts[n.id]);
-          const landing = neutralCoasts.reduce((best, i) =>
-            distance(i, origin) < distance(best, origin) ? i : best,
-          );
-          if (s.owner[landing] === NEUTRAL) s.owner[landing] = n.id;
+          const landings = nearbySeaLandings(s, n.id, NEUTRAL, coasts[n.id]);
+          if (landings.length) s.owner[pick(s, landings)] = n.id;
         }
   }
   for (const key of borders.keys()) {
@@ -572,14 +611,21 @@ export function tick(s) {
       declareWar(s, a, b, { force: false });
     else if (s.settings.alliances && random(s) < 0.004) ally(s, a, b);
   }
-  // Separated coastal nations can still come into conflict and land across a sea.
+  // Overseas rivals must be reachable by a short water crossing.
   if (s.settings.wars && s.year % 16 === 0) {
     const living = s.nations.filter((n) => before[n.id] && coasts[n.id].length);
     if (living.length > 1) {
-      const a = pick(s, living),
-        b = pick(s, living);
+      const a = pick(s, living);
+      const targets = [
+        ...new Set(
+          nearbySeaLandings(s, a.id, null, coasts[a.id]).map((i) => s.owner[i]),
+        ),
+      ].filter(
+        (id) => !related(s.alliances, a.id, id) && !hasTruce(s, a.id, id),
+      );
+      const b = targets.length ? s.nations[pick(s, targets)] : null;
       if (
-        a !== b &&
+        b &&
         !related(s.alliances, a.id, b.id) &&
         random(s) < 0.6 * s.settings.aggression
       )
@@ -632,8 +678,11 @@ export function tick(s) {
       const winner = random(s) < pa / (pa + pb) ? a : b,
         loser = winner === a ? b : a;
       if (s.nations[winner].wealth > 30) {
-        capture(s, pick(s, coasts[loser]), winner, loser, 4);
-        s.nations[winner].wealth -= 20;
+        const landings = nearbySeaLandings(s, winner, loser, coasts[winner]);
+        if (landings.length) {
+          capture(s, pick(s, landings), winner, loser, 4);
+          s.nations[winner].wealth -= 20;
+        }
       }
     }
     if (s.year - started > 25 && random(s) < 0.012) peace(s, a, b);

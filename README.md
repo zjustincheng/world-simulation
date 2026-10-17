@@ -33,7 +33,7 @@ Open http://127.0.0.1:5187. Set `PORT` to use another port. Run simulation tests
 
 ## Simulation
 
-The engine is deterministic from its seed. Nations expand into neutral land. Conquest advances through connected frontier patches. Combat depends on territory, gold, combat efficiency, stability, allied support, and simultaneous fronts. Mountains slow conquest. Coastal nations can land across the sea. Territory earns gold; multiple wars drain it. Low reserves reduce combat efficiency, and low stability can trigger connected revolutions. Capitals relocate after capture, and countries with no land fall.
+The engine is deterministic from its seed. Nations expand into neutral land. Conquest advances through connected frontier patches. Combat depends on territory, gold, combat efficiency, stability, allied support, and simultaneous fronts. Mountains slow conquest. Colonization and naval invasions require a connected water route of at most four water tiles from an owned coast. The closest reachable shore is chosen; intervening land and map edges block travel. AI nations only declare overseas wars on reachable coastal neighbors. Nearby island hopping remains possible, while unlimited ocean crossings are prevented. Territory earns gold; multiple wars drain it. Low reserves reduce combat efficiency, and low stability can trigger connected revolutions. Capitals relocate after capture, and countries with no land fall.
 
 The map is 160 × 100 tiles. Water is `-1`, neutral land is `-2`, and owned land stores the nation's ID. Simulation advances while the page is open. Named saves are manual; session recovery is automatic. Browser storage is local to the device and site origin and subject to browser quota. Export important worlds for a portable backup. This is an independent sandbox with original code and visuals, not a recreation of another game's complete rules or assets.
 
@@ -60,3 +60,5 @@ python3 game/scripts/build-real-maps.py /path/to/ne_110m_land.geojson
 ```
 
 The generated file records the source SHA-256. Geographic tests check fixed coastlines across seeds and known land/ocean landmarks for all seven maps.
+
+Sea-travel regression tests cover range limits, land barriers, map edges, nearby colonization, distant forced wars, AI rival selection, and lost launch coasts.
