@@ -20,6 +20,7 @@ import {
   validate,
 } from "./engine.js";
 import { REAL_MAPS } from "./real-maps.js";
+import { capitalRegion, generateNationName } from "./names.js";
 import {
   readSaves,
   saveWorld,
@@ -372,12 +373,12 @@ function renderDetail(force = false) {
     .filter((p) => p.includes(selected))
     .map((p) => world.nations[p[0] === selected ? p[1] : p[0]].name);
   detail.dataset.nation = selected;
-  detail.innerHTML = `<div class="detail-top">NATION INSPECTOR <button id="close-detail" aria-label="Close nation inspector">×</button></div><div class="detail-title"><span class="flag" style="background:${n.color}"></span><h2>${esc(n.name)}</h2></div><div class="detail-status">${alive ? (enemies.length ? "⚔ AT WAR · " + enemies.length + " FRONT" + (enemies.length > 1 ? "S" : "") : "● AT PEACE") : "FALLEN NATION"} · FOUNDED YEAR ${n.born}</div><div class="metrics"><div><label>Territory</label><strong>${compact(counts[selected])} <small>tiles</small></strong></div><div><label>Gold <small>(${(n.income || 0) >= 0 ? "+" : ""}${n.income || 0}/yr)</small></label><strong>${compact(Math.floor(n.wealth))}</strong></div><div><label>Combat efficiency</label><strong>${Math.round(n.efficiency)}<small>%</small></strong><div class="stat-bar"><div style="width:${Math.min(100, n.efficiency / 1.5)}%"></div></div></div><div><label>Stability</label><strong>${Math.round(n.stability)}<small>%</small></strong><div class="stat-bar"><div style="width:${n.stability}%;background:${n.stability < 40 ? "#ed827e" : "#8ed8b1"}"></div></div></div></div><div class="relations"><b>Allies:</b> ${esc(allies.join(", ") || "None")}<br><b>Enemies:</b> ${esc(enemies.join(", ") || "None")}</div><div class="god-heading">GOD MODE <span>${n.kills} CONQUESTS</span></div><div class="actions"><button data-action="gold" ${!alive ? "disabled" : ""}>＋ 500 gold</button><button data-action="peace" ${!enemies.length ? "disabled" : ""}>☮ Make peace</button><button data-action="rebel" ${counts[selected] < 30 ? "disabled" : ""}>⚡ Revolt</button><button data-action="follow" ${!alive ? "disabled" : ""}>⌖ Find capital</button></div><select id="rival" class="diplomacy-select" aria-label="Target nation">${world.nations
+  detail.innerHTML = `<div class="detail-top">NATION INSPECTOR <button id="close-detail" aria-label="Close nation inspector">×</button></div><div class="detail-title"><span class="flag" style="background:${n.color}"></span><h2>${esc(n.name)}</h2></div><div class="detail-status">${alive ? (enemies.length ? "⚔ AT WAR · " + enemies.length + " FRONT" + (enemies.length > 1 ? "S" : "") : "● AT PEACE") : "FALLEN NATION"} · FOUNDED YEAR ${n.born}<br>CAPITAL REGION · ${esc(capitalRegion(world, n.capital).label)}</div><div class="metrics"><div><label>Territory</label><strong>${compact(counts[selected])} <small>tiles</small></strong></div><div><label>Gold <small>(${(n.income || 0) >= 0 ? "+" : ""}${n.income || 0}/yr)</small></label><strong>${compact(Math.floor(n.wealth))}</strong></div><div><label>Combat efficiency</label><strong>${Math.round(n.efficiency)}<small>%</small></strong><div class="stat-bar"><div style="width:${Math.min(100, n.efficiency / 1.5)}%"></div></div></div><div><label>Stability</label><strong>${Math.round(n.stability)}<small>%</small></strong><div class="stat-bar"><div style="width:${n.stability}%;background:${n.stability < 40 ? "#ed827e" : "#8ed8b1"}"></div></div></div></div><div class="relations"><b>Allies:</b> ${esc(allies.join(", ") || "None")}<br><b>Enemies:</b> ${esc(enemies.join(", ") || "None")}</div><div class="god-heading">GOD MODE <span>${n.kills} CONQUESTS</span></div><div class="actions"><button data-action="gold" ${!alive ? "disabled" : ""}>＋ 500 gold</button><button data-action="peace" ${!enemies.length ? "disabled" : ""}>☮ Make peace</button><button data-action="rebel" ${counts[selected] < 30 ? "disabled" : ""}>⚡ Revolt</button><button data-action="follow" ${!alive ? "disabled" : ""}>⌖ Find capital</button></div><select id="rival" class="diplomacy-select" aria-label="Target nation">${world.nations
     .filter((m) => m.id !== selected && counts[m.id])
     .map((m) => `<option value="${m.id}">${esc(m.name)}</option>`)
     .join(
       "",
-    )}</select><div class="actions"><button data-action="war" class="danger-outline" ${!alive ? "disabled" : ""}>⚔ Declare war</button><button data-action="ally" ${!alive ? "disabled" : ""}>◇ Toggle alliance</button><button data-action="annex" ${!alive ? "disabled" : ""}>▣ Annex target</button><button data-action="collapse" class="danger-outline" ${!alive ? "disabled" : ""}>× Collapse</button></div><details id="edit-nation" class="edit-toggle" ${open ? "open" : ""}><summary>Edit nation</summary><div class="edit-fields"><label>Name<input type="text" id="nation-name" maxlength="35" value="${esc(n.name)}"></label><label>Color<input type="color" id="nation-color" value="${n.color}"></label><label>Combat efficiency <input id="efficiency" type="range" min="15" max="150" value="${Math.round(n.efficiency)}"></label><label>Stability <input id="stability" type="range" min="5" max="100" value="${Math.round(n.stability)}"></label><button data-action="apply">Apply changes</button></div></details>`;
+    )}</select><div class="actions"><button data-action="war" class="danger-outline" ${!alive ? "disabled" : ""}>⚔ Declare war</button><button data-action="ally" ${!alive ? "disabled" : ""}>◇ Toggle alliance</button><button data-action="annex" ${!alive ? "disabled" : ""}>▣ Annex target</button><button data-action="collapse" class="danger-outline" ${!alive ? "disabled" : ""}>× Collapse</button></div><details id="edit-nation" class="edit-toggle" ${open ? "open" : ""}><summary>Edit nation</summary><div class="edit-fields"><label>Name<input type="text" id="nation-name" maxlength="35" value="${esc(n.name)}"></label><label>Color<input type="color" id="nation-color" value="${n.color}"></label><label>Combat efficiency <input id="efficiency" type="range" min="15" max="150" value="${Math.round(n.efficiency)}"></label><label>Stability <input id="stability" type="range" min="5" max="100" value="${Math.round(n.stability)}"></label><button data-action="regional-name">✧ Name from capital</button><button data-action="apply">Apply changes</button></div></details>`;
   if (rival && [...$("#rival").options].some((o) => o.value === rival))
     $("#rival").value = rival;
 }
@@ -507,6 +508,10 @@ $("#nation-detail").onclick = (e) => {
       y: (H / 2 - Math.floor(n.capital / W)) * scale + 8,
     };
     updateZoom();
+  }
+  if (action === "regional-name") {
+    n.name = generateNationName(world, n.capital, { excludeId: selected });
+    toast(`Renamed to ${n.name}.`);
   }
   if (action === "apply") {
     const name = $("#nation-name").value.trim();
@@ -764,12 +769,15 @@ canvas.addEventListener("pointermove", (e) => {
   const i = cellAt(pointer.x, pointer.y),
     n = i >= 0 ? world.owner[i] : WATER,
     tip = $("#tooltip");
-  tip.style.display = tool === "inspect" && n !== WATER ? "block" : "none";
+  tip.style.display =
+    ["inspect", "spawn"].includes(tool) && n !== WATER ? "block" : "none";
   if (n !== WATER && i >= 0) {
     tip.innerHTML =
-      n >= 0
-        ? `${esc(world.nations[n].name)}<small>${counts[n]} tiles · ${Math.floor(world.nations[n].wealth)} gold</small>`
-        : "Unclaimed land";
+      tool === "spawn"
+        ? `${esc($("#spawn-name").value.trim() || generateNationName(world, i))}<small>${esc(capitalRegion(world, i).label)} · Click to found nation</small>`
+        : n >= 0
+          ? `${esc(world.nations[n].name)}<small>${counts[n]} tiles · ${Math.floor(world.nations[n].wealth)} gold</small>`
+          : "Unclaimed land";
     tip.style.left = Math.max(0, Math.min(cw - 180, pointer.x + 14)) + "px";
     tip.style.top = Math.max(0, pointer.y - 50) + "px";
   }

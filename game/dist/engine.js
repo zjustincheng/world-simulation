@@ -1,5 +1,6 @@
 // Deterministic tile simulation. -1 = water, -2 = unclaimed land.
 import { REAL_MAPS } from "./real-maps.js";
+import { generateNationName } from "./names.js";
 export const W = 160,
   H = 100,
   WATER = -1,
@@ -18,40 +19,6 @@ export const colors = [
   "#a7a5ed",
   "#a7ca85",
   "#d3b182",
-];
-const names = [
-  "Aurelia",
-  "Veyr",
-  "Northreach",
-  "Solmere",
-  "Veloria",
-  "Rosewater",
-  "Elderwood",
-  "Thalen",
-  "Karth",
-  "Frosthold",
-  "Sundale",
-  "Ashen",
-  "Caldera",
-  "Myr",
-  "Ostara",
-  "Dunwich",
-  "Illyria",
-  "Ravenport",
-  "Senora",
-  "Valen",
-  "Caspia",
-  "Redhaven",
-  "Arcadia",
-  "Borealis",
-  "Nerath",
-  "Estara",
-  "Haldor",
-  "Lysander",
-  "Marava",
-  "Orinth",
-  "Talmar",
-  "Westfall",
 ];
 // Extend the palette without repeating a founding nation's exact color.
 for (let id = colors.length; id < MAX_NATIONS; id++) {
@@ -234,10 +201,7 @@ export function createWorld(
 function nationRecord(s, id, capital, name) {
   return {
     id,
-    name:
-      name ||
-      names[id % names.length] +
-        (id >= names.length ? " " + (Math.floor(id / names.length) + 1) : ""),
+    name: name || generateNationName(s, capital),
     color: colors[id % colors.length],
     capital,
     wealth: 160,
@@ -409,7 +373,7 @@ export function rebel(s, a) {
       s,
       id,
       center,
-      `Free ${old.name.replace(/^Free /, "").slice(0, 24)}`,
+      generateNationName(s, center, { revolution: true }),
     ),
   );
   const queue = [center],

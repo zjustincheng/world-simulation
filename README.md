@@ -22,6 +22,7 @@ Open http://127.0.0.1:5187. Set `PORT` to use another port. Run simulation tests
 - Generated continents, Pangaea, an archipelago, an all-land arena, and a blank canvas remain available. Choose **I'll place them myself**, or automatically generate 6–32 nations with established borders or expanding settlements.
 - Select a nation on the map or ranking. Inspect territory, gold, combat efficiency, stability, allies, and enemies.
 - Use god mode to donate gold, force war or peace, toggle an alliance, annex a target, trigger a revolt, or collapse a nation. Names, colors, efficiency, and stability are editable.
+- Leave a new nation's name blank to derive it from its capital: regional inspirations on real-world maps and terrain/latitude on generated maps. Hover in Spawn mode to preview the name. Existing nations can use **Edit nation → Name from capital**. Revolutions get names from their own capital region, and names remain stable when capitals relocate.
 - Paint land, sea, ownership, or unclaimed territory. Spawn new nations on land. Editing pauses time; undo restores the last map stroke. Up to 64 nations can exist in a world's history.
 - Watch highlighted fronts, capture effects, capital losses, naval landings, and fallen nations. Switch between political, diplomacy, and terrain views.
 - Pause, step one year, or run at 1×, 3×, 10×, or 30× speed. Space toggles playback; Escape returns to Inspect. Drag to pan and scroll to zoom.
@@ -41,6 +42,7 @@ The map is 160 × 100 tiles. Water is `-1`, neutral land is `-2`, and owned land
 
 - `game/dist/engine.js`: seeded world generation, conquest, economy, diplomacy, editing, save migration and validation
 - `game/dist/app.js`: canvas renderer, manual nation placement, map editor, war room, touch gestures and god mode
+- `game/dist/names.js`: deterministic capital-based naming, geographic inspirations, terrain names, and duplicate avoidance
 - `game/dist/saves.js`: six-slot save library, legacy save migration, and separate session recovery
 - `game/dist/real-maps.js`: seven bundled geographic land masks; no runtime map download
 - `game/scripts/build-real-maps.py`: reproducible GeoJSON-to-map conversion
@@ -62,3 +64,5 @@ python3 game/scripts/build-real-maps.py /path/to/ne_110m_land.geojson
 The generated file records the source SHA-256. Geographic tests check fixed coastlines across seeds and known land/ocean landmarks for all seven maps.
 
 Sea-travel regression tests cover range limits, land barriers, map edges, nearby colonization, distant forced wars, AI rival selection, and lost launch coasts.
+
+Regional names are fictional political names inspired by nearby geographic anchors, not a claim about modern borders or historical sovereignty. Name generation uses its own deterministic hash and does not consume simulation randomness. Custom names and existing saved names are retained.
