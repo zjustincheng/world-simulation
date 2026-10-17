@@ -26,6 +26,7 @@
         ><span><b id="claimed">0%</b> claimed</span>
       </div>
       <div class="header-actions">
+        <button id="spawn-nation">⚑ Spawn nation</button>
         <button id="save">Save</button><button id="load">Load</button
         ><button id="new" class="primary">＋ New world</button>
       </div>
@@ -134,6 +135,46 @@
           ><button data-panel="settings">Settings</button>
         </nav>
         <section id="panel-nations" class="panel">
+          <section id="spawn-setup" hidden>
+            <div class="eyebrow">PLACE YOUR NATIONS</div>
+            <h2>Choose a home on the map.</h2>
+            <p>
+              Click land to create a nation. Keep placing countries, then start
+              the simulation.
+            </p>
+            <label
+              >Nation name
+              <input
+                id="spawn-name"
+                type="text"
+                maxlength="35"
+                placeholder="Auto-generated name"
+            /></label>
+            <div class="spawn-options">
+              <label
+                >Color <input id="spawn-color" type="color" value="#ed695e"
+              /></label>
+              <label
+                >Starting size
+                <select id="spawn-radius">
+                  <option value="1">Tiny</option>
+                  <option value="3" selected>Small</option>
+                  <option value="6">Large</option>
+                </select></label
+              >
+            </div>
+            <p id="spawn-count" class="setting-note">No nations placed yet.</p>
+            <div class="actions">
+              <button id="undo-spawn" disabled>↶ Undo placement</button
+              ><button id="start-simulation" class="primary">
+                ▶ Start simulation
+              </button>
+            </div>
+            <p class="setting-note">
+              You can also place nations inside existing territory. Right-drag
+              to pan; scroll to zoom.
+            </p>
+          </section>
           <div id="nation-detail" hidden></div>
           <div class="list-heading">
             <span>WORLD RANKING</span
@@ -240,23 +281,46 @@
           </div></label
         ><label
           >Map type<select id="preset" name="preset">
-            <option value="continents">
-              Continents — connected land and open seas
-            </option>
-            <option value="pangaea">Pangaea — one massive battleground</option>
-            <option value="islands">
-              Archipelago — island nations and naval landings
-            </option>
-            <option value="arena">Arena — all land, constant conflict</option>
-            <option value="blank">Blank canvas — build your own map</option>
+            <optgroup label="Real-world maps">
+              <option value="earth" selected>Earth — world map</option>
+              <option value="europe">Europe</option>
+              <option value="asia">Asia</option>
+              <option value="africa">Africa</option>
+              <option value="north-america">North America</option>
+              <option value="south-america">South America</option>
+              <option value="oceania">Australia &amp; Oceania</option>
+            </optgroup>
+            <optgroup label="Generated maps">
+              <option value="continents">
+                Continents — connected land and open seas
+              </option>
+              <option value="pangaea">
+                Pangaea — one massive battleground
+              </option>
+              <option value="islands">
+                Archipelago — island nations and naval landings
+              </option>
+              <option value="arena">Arena — all land, constant conflict</option>
+              <option value="blank">Blank canvas — build your own map</option>
+            </optgroup>
           </select></label
         >
+        <canvas
+          id="map-preview"
+          width="320"
+          height="200"
+          aria-label="Preview of selected map"
+        ></canvas>
+        <p id="map-description" class="setting-note">
+          Real coastlines. Create your own countries and borders.
+        </p>
         <div class="form-columns">
           <label
             >Nations<select name="count">
+              <option value="0" selected>I'll place them myself</option>
               <option value="6">6 nations</option>
               <option value="12">12 nations</option>
-              <option value="16" selected>16 nations</option>
+              <option value="16">16 nations</option>
               <option value="24">24 nations</option>
               <option value="32">32 nations</option>
             </select></label

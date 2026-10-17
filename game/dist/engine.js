@@ -1,4 +1,5 @@
 // Deterministic tile simulation. -1 = water, -2 = unclaimed land.
+import { REAL_MAPS } from "./real-maps.js";
 export const W = 160,
   H = 100,
   WATER = -1,
@@ -166,6 +167,18 @@ export function createWorld(
       s.terrain.push(height);
       s.owner[y * W + x] = height > 0 ? NEUTRAL : WATER;
     }
+  if (REAL_MAPS[preset]) {
+    s.owner.fill(WATER);
+    s.terrain.fill(-0.2);
+    REAL_MAPS[preset].rows.forEach((spans, y) => {
+      for (let k = 0; k < spans.length; k += 2) {
+        for (let x = spans[k]; x < spans[k] + spans[k + 1]; x++) {
+          s.owner[y * W + x] = NEUTRAL;
+          s.terrain[y * W + x] = 0.12;
+        }
+      }
+    });
+  }
   const land = s.owner
       .map((n, i) => (n === NEUTRAL ? i : -1))
       .filter((i) => i >= 0),

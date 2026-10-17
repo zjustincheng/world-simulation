@@ -3,6 +3,7 @@ import {
   H,
   WATER,
   NEUTRAL,
+  colors,
   createWorld,
   tick,
   stats,
@@ -18,6 +19,7 @@ import {
   log,
   validate,
 } from "./engine.js";
+import { REAL_MAPS } from "./real-maps.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const canvas = $("#map"),
@@ -26,9 +28,9 @@ const pixelCanvas = document.createElement("canvas");
 pixelCanvas.width = W;
 pixelCanvas.height = H;
 const pixelCtx = pixelCanvas.getContext("2d");
-let world = createWorld(),
+let world = createWorld("EARTH", 0, "earth"),
   selected = null,
-  running = true,
+  running = false,
   speed = 1,
   layer = "political",
   tool = "inspect";
@@ -276,7 +278,7 @@ function draw(now = performance.now()) {
       ctx.arc(
         (i % W) + 0.5,
         Math.floor(i / W) + 0.5,
-        tool === "spawn" ? 3 : brush,
+        tool === "spawn" ? Number($("#spawn-radius").value) : brush,
         0,
         Math.PI * 2,
       );
@@ -342,7 +344,7 @@ function renderRanking() {
 }
 function renderDetail(force = false) {
   const detail = $("#nation-detail");
-  if (selected === null || !world.nations[selected]) {
+  if (tool === "spawn" || selected === null || !world.nations[selected]) {
     detail.hidden = true;
     return;
   }
@@ -392,7 +394,15 @@ function refresh({ map = true } = {}) {
     Math.round(
       (counts.reduce((a, b) => a + b, 0) / Math.max(1, landCount)) * 100,
     ) + "%";
-  $("#seed-label").textContent = world.seed;
+  $("#seed-label").textContent = REAL_MAPS[world.preset]
+    ? `${REAL_MAPS[world.preset].name} · ${world.seed}`
+    : world.seed;
+  const placed = counts.filter(Boolean).length;
+  $("#spawn-count").textContent = placed
+    ? `${placed} nation${placed === 1 ? "" : "s"} placed. Add more, or start when you're ready.`
+    : "No nations placed yet. Click land to place your first nation.";
+  $("#start-simulation").disabled = placed === 0;
+  $("#undo-spawn").disabled = !undoSnapshot;
   renderRanking();
   renderDetail();
   $("#events").innerHTML = world.events
@@ -480,6 +490,11 @@ function setRunning(value) {
   $(".transport").classList.toggle("paused", !running);
 }
 $("#play").onclick = () => {
+  if (!running && !counts.some(Boolean)) {
+    setTool(world.preset === "blank" ? "land" : "spawn");
+    toast("Place at least one nation on land before starting.");
+    return;
+  }
   if (!running) setTool("inspect");
   setRunning(!running);
 };
@@ -533,10 +548,14 @@ function setTool(value) {
     b.classList.toggle("active", b.dataset.tool === tool),
   );
   $("#brush-control").hidden = ["inspect", "spawn"].includes(tool);
+  $("#spawn-setup").hidden = tool !== "spawn";
+  $("#spawn-nation").classList.toggle("primary", tool === "spawn");
+  if (tool === "spawn") switchPanel("nations");
   if (tool !== "inspect") setRunning(false);
   const messages = {
     inspect: "Select a nation to inspect it. Drag to pan · Scroll to zoom",
-    spawn: "Click any land tile to place a new nation. Escape to inspect.",
+    spawn:
+      "Click land to spawn nations · Right-drag to pan · Press Play when ready",
     territory:
       selected === null
         ? "Select a nation from the ranking, then paint its territory."
@@ -546,8 +565,17 @@ function setTool(value) {
     erase: "Drag to remove ownership and leave unclaimed land.",
   };
   $("#tool-hint").textContent = messages[tool];
+  renderDetail(true);
   draw();
 }
+$("#spawn-nation").onclick = () => setTool("spawn");
+$("#spawn-radius").onchange = () => draw();
+$("#start-simulation").onclick = () => {
+  if (!counts.some(Boolean))
+    return toast("Place at least one nation on land first.");
+  setTool("inspect");
+  setRunning(true);
+};
 $$("[data-tool]").forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
 $("#brush").oninput = (e) => {
   brush = Number(e.target.value);
@@ -570,24 +598,40 @@ function editAt(point) {
   return paint(world, i, brush, tool, selected);
 }
 canvas.addEventListener("pointerdown", (e) => {
-  if (e.button !== 0) return;
+  if (![0, 1, 2].includes(e.button)) return;
   pointer = eventPoint(e);
   canvas.setPointerCapture(e.pointerId);
-  drag = { ...pointer, px: pan.x, py: pan.y, moved: false, last: pointer };
-  if (tool !== "inspect") {
-    undoSnapshot = structuredClone(world);
-    $("#undo").disabled = false;
+  drag = {
+    ...pointer,
+    px: pan.x,
+    py: pan.y,
+    moved: false,
+    last: pointer,
+    panning: e.button !== 0 || e.shiftKey,
+  };
+  if (tool !== "inspect" && !drag.panning) {
+    const before = structuredClone(world);
     if (tool === "spawn") {
-      const id = spawnNation(world, cellAt(pointer.x, pointer.y));
+      const id = spawnNation(world, cellAt(pointer.x, pointer.y), {
+        name: $("#spawn-name").value.trim() || undefined,
+        radius: Number($("#spawn-radius").value),
+      });
       if (id < 0)
         toast("Place a nation on land. A world supports up to 64 nations.");
       else {
+        undoSnapshot = before;
+        $("#undo").disabled = false;
+        world.nations[id].color = $("#spawn-color").value;
+        $("#spawn-name").value = "";
+        $("#spawn-color").value = colors[world.nations.length % colors.length];
         selected = id;
         switchPanel("nations");
         renderDetail(true);
       }
       refresh();
     } else {
+      undoSnapshot = before;
+      $("#undo").disabled = false;
       if (tool === "territory" && selected === null)
         toast("Select a nation from the ranking first.");
       editAt(pointer);
@@ -601,7 +645,7 @@ canvas.addEventListener("pointermove", (e) => {
     const dx = pointer.x - drag.x,
       dy = pointer.y - drag.y;
     if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
-    if (tool === "inspect") {
+    if (tool === "inspect" || drag.panning) {
       pan = { x: drag.px + dx, y: drag.py + dy };
       draw();
     } else if (tool !== "spawn") {
@@ -636,7 +680,7 @@ canvas.addEventListener("pointermove", (e) => {
   }
 });
 canvas.addEventListener("pointerup", (e) => {
-  if (drag && tool === "inspect" && !drag.moved) {
+  if (drag && tool === "inspect" && !drag.moved && !drag.panning) {
     const p = eventPoint(e),
       i = cellAt(p.x, p.y);
     if (i >= 0 && world.owner[i] >= 0) selectNation(world.owner[i]);
@@ -644,6 +688,7 @@ canvas.addEventListener("pointerup", (e) => {
   drag = null;
 });
 canvas.addEventListener("pointercancel", () => (drag = null));
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 canvas.addEventListener("pointerleave", () => {
   pointer = null;
   $("#tooltip").style.display = "none";
@@ -659,6 +704,7 @@ $("#undo").onclick = () => {
   renderDetail(true);
   toast("Last map stroke undone.");
 };
+$("#undo-spawn").onclick = () => $("#undo").click();
 function updateZoom() {
   $("#zoom-label").textContent = Math.round(zoom * 100) + "%";
   draw();
@@ -727,14 +773,42 @@ function newView() {
   updateZoom();
   refresh();
   renderDetail(true);
+  $("#spawn-color").value = colors[world.nations.length % colors.length];
 }
+function previewMap() {
+  const preset = $("#preset").value;
+  const preview = createWorld($("#seed").value, 0, preset);
+  const previewCanvas = $("#map-preview"),
+    context = previewCanvas.getContext("2d");
+  context.fillStyle = "#20384c";
+  context.fillRect(0, 0, previewCanvas.width, previewCanvas.height);
+  context.fillStyle = "#98b594";
+  preview.owner.forEach((owner, i) => {
+    if (owner !== WATER)
+      context.fillRect((i % W) * 2, Math.floor(i / W) * 2, 2, 2);
+  });
+  $("#map-description").textContent = REAL_MAPS[preset]
+    ? `${REAL_MAPS[preset].name} · Real coastlines, simplified to the game grid. Create your own countries and borders.`
+    : preset === "blank"
+      ? "Paint your own land, then use Spawn nation to add countries."
+      : "A generated landscape. Your seed recreates the same geography.";
+  const manual = $("[name=count]").value === "0" || preset === "blank";
+  $("[name=start]").disabled = manual;
+  $("[name=count]").disabled = preset === "blank";
+}
+$("#preset").onchange = previewMap;
+$("[name=count]").onchange = previewMap;
+$("#seed").onchange = previewMap;
 $("#new").onclick = () => {
   $("#seed").value = "WORLD-" + Math.floor(Math.random() * 999999);
   $("#new-dialog").showModal();
+  previewMap();
 };
 $("#cancel").onclick = () => $("#new-dialog").close();
-$("#random-seed").onclick = () =>
-  ($("#seed").value = "WORLD-" + Math.floor(Math.random() * 999999));
+$("#random-seed").onclick = () => {
+  $("#seed").value = "WORLD-" + Math.floor(Math.random() * 999999);
+  previewMap();
+};
 $("#world-form").onsubmit = (e) => {
   e.preventDefault();
   const data = new FormData(e.target);
@@ -742,12 +816,14 @@ $("#world-form").onsubmit = (e) => {
     String(data.get("seed")),
     Number(data.get("count")),
     String(data.get("preset")),
-    String(data.get("start")),
+    String(data.get("start") || "seeds"),
   );
   $("#new-dialog").close();
   newView();
-  setRunning(data.get("preset") !== "blank");
+  const manual = Number(data.get("count")) === 0;
+  setRunning(!manual && data.get("preset") !== "blank");
   if (data.get("preset") === "blank") setTool("land");
+  else if (manual) setTool("spawn");
   toast("New world created.");
 };
 $("#help").onclick = () => $("#help-dialog").showModal();
@@ -810,9 +886,9 @@ document.addEventListener("keydown", (e) => {
     !/INPUT|SELECT|BUTTON|TEXTAREA/.test(e.target.tagName)
   ) {
     e.preventDefault();
-    if (!running) setTool("inspect");
-    setRunning(!running);
+    $("#play").click();
   }
 });
 refresh();
+setTool("spawn");
 requestAnimationFrame(animate);

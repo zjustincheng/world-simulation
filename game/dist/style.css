@@ -1219,3 +1219,82 @@ dialog label > select {
     width: 74px;
   }
 }
+/* Nation placement stays available without entering the map editor. */
+#spawn-setup {
+  border: 1px solid #8ed8b133;
+  background: #8ed8b108;
+  border-radius: 9px;
+  padding: 16px;
+  margin-bottom: 22px;
+}
+#spawn-setup h2 {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+  margin: 12px 0;
+}
+#spawn-setup p {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+#spawn-setup label {
+  font-size: 10px;
+  color: #b7c5d3;
+  display: block;
+  margin-top: 14px;
+}
+#spawn-setup input[type="text"] {
+  width: 100%;
+  margin-top: 7px;
+}
+.spawn-options {
+  display: grid;
+  grid-template-columns: 65px 1fr;
+  gap: 15px;
+}
+.spawn-options select {
+  width: 100%;
+  margin-top: 7px;
+  font-size: 10px;
+}
+.spawn-options input[type="color"] {
+  display: block;
+  width: 50px;
+  height: 35px;
+  background: none;
+  border: 1px solid #ffffff25;
+  border-radius: 5px;
+  padding: 3px;
+  margin-top: 7px;
+}
+#spawn-setup .actions {
+  grid-template-columns: 1fr;
+}
+#map-preview {
+  width: 100%;
+  height: 145px;
+  object-fit: contain;
+  background: #20384c;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  margin-top: 14px;
+  cursor: default;
+  image-rendering: pixelated;
+}
+#map-description {
+  margin-top: 8px;
+  margin-bottom: 5px;
+}
+#spawn-nation {
+  white-space: nowrap;
+}
+@media (max-width: 650px) {
+  #spawn-setup .actions {
+    grid-template-columns: 1fr 1fr;
+  }
+  .header-actions #spawn-nation {
+    flex: 1.6;
+    font-size: 10px;
+  }
+}

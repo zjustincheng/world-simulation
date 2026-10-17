@@ -170,3 +170,97 @@ test("saves preserve the deterministic future, legacy saves migrate, malformed i
   invalidSettings.settings.ai = "yes";
   assert.throws(() => validate(invalidSettings));
 });
+
+test("real-world presets have fixed coastlines, allow empty starts, and place known landmarks correctly", async () => {
+  const { REAL_MAPS } = await import("../dist/real-maps.js");
+  const merc = (lat) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
+  const cases = {
+    earth: {
+      land: [
+        [-100, 40],
+        [-60, -5],
+        [20, 20],
+        [105, 35],
+        [135, -25],
+      ],
+      sea: [
+        [-30, 0],
+        [90, -30],
+      ],
+    },
+    europe: {
+      land: [
+        [2, 49],
+        [-2, 54],
+        [25, 55],
+      ],
+      sea: [[-20, 50]],
+    },
+    asia: {
+      land: [
+        [105, 35],
+        [78, 22],
+      ],
+      sea: [[90, -5]],
+    },
+    africa: {
+      land: [
+        [20, 5],
+        [20, -20],
+      ],
+      sea: [[-15, -10]],
+    },
+    "north-america": {
+      land: [
+        [-100, 40],
+        [-110, 55],
+      ],
+      sea: [[-60, 30]],
+    },
+    "south-america": {
+      land: [
+        [-60, -10],
+        [-65, -30],
+      ],
+      sea: [[-35, -20]],
+    },
+    oceania: {
+      land: [
+        [135, -25],
+        [145, -20],
+      ],
+      sea: [[165, -25]],
+    },
+  };
+  for (const [preset, points] of Object.entries(cases)) {
+    const s = createWorld("geography-a", 0, preset),
+      other = createWorld("geography-b", 0, preset);
+    assert.equal(s.nations.length, 0);
+    assert.deepEqual(s.owner, other.owner);
+    assert.ok(s.owner.includes(NEUTRAL));
+    assert.ok(s.owner.includes(WATER));
+    validate(s);
+    const [west, south, east, north] = REAL_MAPS[preset].bounds;
+    const cell = ([lon, lat]) =>
+      Math.floor(
+        ((merc(north) - merc(lat)) / (merc(north) - merc(south))) * H,
+      ) *
+        W +
+      Math.floor(((lon - west) / (east - west)) * W);
+    for (const point of points.land)
+      assert.equal(
+        s.owner[cell(point)],
+        NEUTRAL,
+        `${preset}: land at ${point}`,
+      );
+    for (const point of points.sea)
+      assert.equal(s.owner[cell(point)], WATER, `${preset}: ocean at ${point}`);
+    const initial = s.owner.indexOf(NEUTRAL),
+      id = spawnNation(s, initial, { name: "My Republic", radius: 1 });
+    assert.equal(id, 0);
+    assert.equal(s.nations[id].name, "My Republic");
+    assert.equal(s.owner[initial], id);
+    assert.equal(s.year, 1);
+    validate(s);
+  }
+});
