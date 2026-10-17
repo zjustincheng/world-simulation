@@ -131,6 +131,8 @@ export function createWorld(
     terrain: [],
     nations: [],
     wars: [],
+    truces: [],
+    warStats: {},
     alliances: [],
     events: [],
     flashes: [],
@@ -299,14 +301,33 @@ export function reconcile(s) {
   });
   for (const key of ["wars", "alliances"])
     s[key] = s[key].filter((p) => counts[p[0]] && counts[p[1]]);
+  s.truces = (s.truces || []).filter(
+    (p) => counts[p[0]] && counts[p[1]] && p[2] > s.year,
+  );
+  s.warStats ||= {};
+  const active = new Set(s.wars.map((p) => p.slice(0, 2).join(",")));
+  for (const key of Object.keys(s.warStats))
+    if (!active.has(key)) delete s.warStats[key];
   return counts;
 }
-export function declareWar(s, a, b) {
+export const hasTruce = (s, a, b) =>
+  (s.truces || []).some((p) => related([p], a, b) && p[2] > s.year);
+export function declareWar(s, a, b, { force = true } = {}) {
   const counts = stats(s);
   if (a === b || !counts[a] || !counts[b] || related(s.wars, a, b))
     return false;
+  if (!force && hasTruce(s, a, b)) return false;
+  if (hasTruce(s, a, b))
+    log(
+      s,
+      `${s.nations[a].name} breaks its truce with ${s.nations[b].name}.`,
+      "war",
+    );
+  s.truces = (s.truces || []).filter((p) => !related([p], a, b));
   s.alliances = s.alliances.filter((p) => !related([p], a, b));
   s.wars.push([...pair(a, b), s.year]);
+  s.warStats ||= {};
+  s.warStats[pair(a, b).join(",")] = [0, 0];
   log(s, `${s.nations[a].name} declares war on ${s.nations[b].name}.`, "war");
   return true;
 }
@@ -316,10 +337,16 @@ export function peace(s, a, b = null) {
       (p[0] === a || p[1] === a) && (b === null || p[0] === b || p[1] === b),
   );
   s.wars = s.wars.filter((p) => !ended.includes(p));
+  s.truces ||= [];
+  for (const [first, second] of ended) {
+    s.truces = s.truces.filter((p) => !related([p], first, second));
+    s.truces.push([first, second, s.year + 15]);
+    if (s.warStats) delete s.warStats[`${first},${second}`];
+  }
   if (ended.length)
     log(
       s,
-      `${s.nations[a].name} signs ${b === null ? "a peace accord" : `peace with ${s.nations[b].name}`}.`,
+      `${s.nations[a].name} signs ${b === null ? "a peace accord" : `peace with ${s.nations[b].name}`}. A 15-year truce begins.`,
       "peace",
     );
   return ended.length;
@@ -500,6 +527,10 @@ function capture(s, cell, winner, loser, budget) {
   }
   if (taken)
     s.flashes.push({ cell, color: s.nations[winner].color, year: s.year });
+  const key = pair(winner, loser).join(",");
+  s.warStats ||= {};
+  s.warStats[key] ||= [0, 0];
+  s.warStats[key][winner < loser ? 0 : 1] += taken;
   return taken;
 }
 export function tick(s) {
@@ -538,7 +569,7 @@ export function tick(s) {
           s.settings.aggression *
           (s.nations[a].aggression + s.nations[b].aggression)
     )
-      declareWar(s, a, b);
+      declareWar(s, a, b, { force: false });
     else if (s.settings.alliances && random(s) < 0.004) ally(s, a, b);
   }
   // Separated coastal nations can still come into conflict and land across a sea.
@@ -552,7 +583,7 @@ export function tick(s) {
         !related(s.alliances, a.id, b.id) &&
         random(s) < 0.6 * s.settings.aggression
       )
-        declareWar(s, a.id, b.id);
+        declareWar(s, a.id, b.id, { force: false });
     }
   }
   const fronts = Array(s.nations.length).fill(0);
@@ -733,6 +764,38 @@ export function validate(input) {
       fail();
   }
   if (s.wars.some((p) => related(s.alliances, p[0], p[1]))) fail();
+  s.truces ??= [];
+  if (
+    !Array.isArray(s.truces) ||
+    s.truces.length > MAX_NATIONS ** 2 ||
+    !s.truces.every(
+      (p) =>
+        Array.isArray(p) &&
+        p.length === 3 &&
+        p.every(integer) &&
+        p[0] >= 0 &&
+        p[1] < s.nations.length &&
+        p[0] < p[1] &&
+        p[2] >= 1,
+    )
+  )
+    fail();
+  if (s.wars.some((p) => hasTruce(s, p[0], p[1]))) fail();
+  s.warStats ??= {};
+  if (
+    !s.warStats ||
+    typeof s.warStats !== "object" ||
+    Array.isArray(s.warStats) ||
+    Object.keys(s.warStats).length > MAX_NATIONS ** 2 ||
+    !Object.values(s.warStats).every(
+      (p) =>
+        Array.isArray(p) &&
+        p.length === 2 &&
+        p.every((n) => integer(n) && n >= 0),
+    )
+  )
+    fail();
+  for (const [a, b] of s.wars) s.warStats[`${a},${b}`] ??= [0, 0];
   if (
     !s.settings ||
     !["ai", "wars", "alliances", "revolts", "expansion"].every(

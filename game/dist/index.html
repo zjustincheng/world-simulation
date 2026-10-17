@@ -132,6 +132,7 @@
           <button class="active" data-panel="nations">
             Nations <span id="list-count"></span></button
           ><button data-panel="history">History</button
+          ><button data-panel="wars">Wars</button
           ><button data-panel="settings">Settings</button>
         </nav>
         <section id="panel-nations" class="panel">
@@ -202,6 +203,19 @@
           </div>
           <div id="events"></div>
         </section>
+        <section id="panel-wars" class="panel" hidden>
+          <div class="panel-heading">
+            <h2>War room</h2>
+            <p>Follow territorial gains and negotiate peace.</p>
+          </div>
+          <div id="wars-list"></div>
+          <h3>ACTIVE TRUCES</h3>
+          <div id="truces-list"></div>
+          <p class="setting-note">
+            Peace grants 15 years of protection from AI war declarations. God
+            mode can break a truce.
+          </p>
+        </section>
         <section id="panel-settings" class="panel" hidden>
           <div class="panel-heading">
             <h2>Simulation rules</h2>
@@ -250,17 +264,42 @@
               accept="application/json,.json"
           /></label>
           <p class="setting-note">
-            Save stores one world in this browser. Export a file to keep
-            multiple worlds or move between devices.
+            Save keeps up to six named worlds in this browser. Session recovery
+            runs every five seconds. Export to move worlds between devices.
           </p>
         </section>
         <div class="sidebar-footer">
-          <span class="online-dot"></span> LOCAL SIMULATION
+          <span class="online-dot"></span>
+          <span id="autosave-status">SESSION RECOVERY ON</span>
           <span id="world-size">160 × 100</span>
         </div>
       </aside>
     </main>
     <div id="toast" role="status"></div>
+    <div id="recovery-banner" hidden role="status">
+      <span id="recovery-message"></span
+      ><button id="resume-recovery" class="primary">Resume</button
+      ><button id="dismiss-recovery">Keep this world</button>
+    </div>
+    <dialog id="saves-dialog">
+      <div class="eyebrow">YOUR WORLDS</div>
+      <h1>Save library</h1>
+      <p>
+        Six named save slots, plus automatic session recovery. Stored in this
+        browser.
+      </p>
+      <form id="save-form">
+        <label>Save name<input id="save-name" maxlength="60" required /></label
+        ><button class="primary full" type="submit">Save in a new slot</button>
+      </form>
+      <p id="save-error" role="status" class="setting-note"></p>
+      <div id="save-list"></div>
+      <p class="setting-note">
+        Replace overwrites a slot with your current world. Export from Settings
+        for a portable backup.
+      </p>
+      <button id="close-saves" class="full">Close</button>
+    </dialog>
     <dialog id="new-dialog">
       <form id="world-form">
         <div class="eyebrow">NEW SIMULATION</div>

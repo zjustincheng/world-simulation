@@ -26,24 +26,28 @@ Open http://127.0.0.1:5187. Set `PORT` to use another port. Run simulation tests
 - Watch highlighted fronts, capture effects, capital losses, naval landings, and fallen nations. Switch between political, diplomacy, and terrain views.
 - Pause, step one year, or run at 1×, 3×, 10×, or 30× speed. Space toggles playback; Escape returns to Inspect. Drag to pan and scroll to zoom.
 - Configure AI, expansion, automatic wars, alliances, revolutions, and war frequency. World War declares war between every living nation.
-- Save/load one world in browser storage or export/import portable JSON worlds. Earlier v1 saves migrate automatically.
+- Save up to six named worlds in the Save/Load library. Load, replace, or delete individual slots. Earlier single-slot saves remain available. Export/import portable JSON worlds.
+- Recover your last session after a reload. Automatic recovery writes every five seconds and when leaving the page, and resumes paused. Recovery stays separate from your named saves.
+- Open **Wars** to track each side's captured tiles, jump to a nation, or negotiate peace. Peace treaties block AI declarations between those nations for 15 years; god mode can override them.
+- On touchscreens, pinch with two fingers to zoom and pan. An editor gesture that becomes a pinch cancels the first finger's placement or painting.
 
 ## Simulation
 
 The engine is deterministic from its seed. Nations expand into neutral land. Conquest advances through connected frontier patches. Combat depends on territory, gold, combat efficiency, stability, allied support, and simultaneous fronts. Mountains slow conquest. Coastal nations can land across the sea. Territory earns gold; multiple wars drain it. Low reserves reduce combat efficiency, and low stability can trigger connected revolutions. Capitals relocate after capture, and countries with no land fall.
 
-The map is 160 × 100 tiles. Water is `-1`, neutral land is `-2`, and owned land stores the nation's ID. Simulation advances while the page is open. Saves are manual, and browser storage is local to the device and site origin. This is an independent sandbox with original code and visuals, not a recreation of another game's complete rules or assets.
+The map is 160 × 100 tiles. Water is `-1`, neutral land is `-2`, and owned land stores the nation's ID. Simulation advances while the page is open. Named saves are manual; session recovery is automatic. Browser storage is local to the device and site origin and subject to browser quota. Export important worlds for a portable backup. This is an independent sandbox with original code and visuals, not a recreation of another game's complete rules or assets.
 
 ## Structure and validation
 
 - `game/dist/engine.js`: seeded world generation, conquest, economy, diplomacy, editing, save migration and validation
-- `game/dist/app.js`: canvas renderer, manual nation placement, map editor, god mode and browser persistence
+- `game/dist/app.js`: canvas renderer, manual nation placement, map editor, war room, touch gestures and god mode
+- `game/dist/saves.js`: six-slot save library, legacy save migration, and separate session recovery
 - `game/dist/real-maps.js`: seven bundled geographic land masks; no runtime map download
 - `game/scripts/build-real-maps.py`: reproducible GeoJSON-to-map conversion
 - `game/dist/index.html`, `style.css`: responsive game interface
 - `game/test/engine.test.mjs`: seeded presets, 400-year invariants, expansion, diplomacy, conquest, connected revolts, editing, AI settings and saves
 
-Browser checks cover diplomacy, nation editing, paint/spawn/undo, save/load, export/import, 30× world war, and mobile layout.
+Browser checks cover diplomacy, nation editing, paint/spawn/undo, named save replacement/deletion, recovery across reloads, export/import, war-room peace treaties, 30× world war, mobile layout, and two-finger pinch navigation. Storage tests cover full slots, quota failures, corruption, migration, and recovery reproducibility.
 
 ## Geographic data
 

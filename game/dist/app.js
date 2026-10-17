@@ -20,6 +20,13 @@ import {
   validate,
 } from "./engine.js";
 import { REAL_MAPS } from "./real-maps.js";
+import {
+  readSaves,
+  saveWorld,
+  deleteSave,
+  readRecovery,
+  writeRecovery,
+} from "./saves.js";
 const $ = (s) => document.querySelector(s),
   $$ = (s) => [...document.querySelectorAll(s)];
 const canvas = $("#map"),
@@ -42,6 +49,7 @@ let zoom = 1,
   pointer = null,
   brush = 3,
   undoSnapshot = null;
+let recoveryPending = null;
 let toastTimer,
   lastTick = performance.now(),
   lastPaint = 0,
@@ -373,6 +381,42 @@ function renderDetail(force = false) {
   if (rival && [...$("#rival").options].some((o) => o.value === rival))
     $("#rival").value = rival;
 }
+function renderWars() {
+  $("#wars-list").innerHTML =
+    world.wars
+      .map(([a, b, started]) => {
+        const first = world.nations[a],
+          second = world.nations[b];
+        const [ga, gb] = world.warStats?.[`${a},${b}`] || [0, 0];
+        const share = ga + gb ? (ga / (ga + gb)) * 100 : 50;
+        return `<article class="war-card"><small>WAR · ${world.year - started} YEARS</small><div class="war-sides"><button data-focus-nation="${a}" style="color:${first.color}">${esc(first.name)}</button><span>⚔</span><button data-focus-nation="${b}" style="color:${second.color}">${esc(second.name)}</button></div><div class="war-balance" style="background:${second.color}"><div style="background:${first.color};width:${share}%"></div></div><div class="war-gains"><span>${ga} captured</span><span>${gb} captured</span></div><button class="full" data-war-peace="${a},${b}">Negotiate peace</button></article>`;
+      })
+      .join("") ||
+    '<p class="setting-note">The world is at peace. Wars will appear here as rival nations clash.</p>';
+  $("#truces-list").innerHTML =
+    (world.truces || [])
+      .filter((p) => p[2] > world.year)
+      .map(
+        ([a, b, until]) =>
+          `<article class="truce-card"><strong>${esc(world.nations[a].name)} & ${esc(world.nations[b].name)}</strong><span>${until - world.year} years remaining</span></article>`,
+      )
+      .join("") || '<p class="setting-note">No active truces.</p>';
+}
+$("#panel-wars").onclick = (e) => {
+  const focus = e.target.closest("[data-focus-nation]");
+  if (focus) {
+    setTool("inspect");
+    selectNation(Number(focus.dataset.focusNation));
+  }
+  const treaty = e.target.closest("[data-war-peace]");
+  if (treaty) {
+    const [a, b] = treaty.dataset.warPeace.split(",").map(Number);
+    peace(world, a, b);
+    undoSnapshot = null;
+    refresh();
+    toast("Peace signed. A 15-year truce protects both nations.");
+  }
+};
 function syncSettings() {
   for (const input of $$("[data-setting]"))
     input.checked = world.settings[input.dataset.setting];
@@ -411,6 +455,7 @@ function refresh({ map = true } = {}) {
         `<article class="event ${["war", "peace", "birth", "battle", "fall"].includes(e.type) ? e.type : ""}"><small>YEAR ${e.year}</small><p>${esc(e.text)}</p></article>`,
     )
     .join("");
+  renderWars();
   draw();
 }
 $("#sort").onchange = renderRanking;
@@ -597,8 +642,45 @@ function editAt(point) {
   if (tool === "territory" && selected === null) return false;
   return paint(world, i, brush, tool, selected);
 }
+const touches = new Map();
+let pinch = null,
+  touchStart = null;
+function touchGeometry() {
+  const [a, b] = [...touches.values()];
+  return {
+    distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+    center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+  };
+}
 canvas.addEventListener("pointerdown", (e) => {
   if (![0, 1, 2].includes(e.button)) return;
+  if (e.pointerType === "touch") {
+    if (!touches.size)
+      touchStart = {
+        world: structuredClone(world),
+        selected,
+        undoSnapshot,
+        name: $("#spawn-name").value,
+        color: $("#spawn-color").value,
+      };
+    touches.set(e.pointerId, eventPoint(e));
+    if (touches.size >= 2) {
+      if (!pinch && touchStart && tool !== "inspect") {
+        // Cancel the first finger's editor action when it becomes a two-finger navigation gesture.
+        world = touchStart.world;
+        selected = touchStart.selected;
+        undoSnapshot = touchStart.undoSnapshot;
+        $("#spawn-name").value = touchStart.name;
+        $("#spawn-color").value = touchStart.color;
+        $("#undo").disabled = !undoSnapshot;
+        refresh();
+      }
+      pinch = touchGeometry();
+      drag = null;
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+  }
   pointer = eventPoint(e);
   canvas.setPointerCapture(e.pointerId);
   drag = {
@@ -640,6 +722,19 @@ canvas.addEventListener("pointerdown", (e) => {
   }
 });
 canvas.addEventListener("pointermove", (e) => {
+  if (e.pointerType === "touch" && touches.has(e.pointerId))
+    touches.set(e.pointerId, eventPoint(e));
+  if (pinch) {
+    if (touches.size >= 2) {
+      const next = touchGeometry();
+      changeZoom(next.distance / pinch.distance, pinch.center);
+      pan.x += next.center.x - pinch.center.x;
+      pan.y += next.center.y - pinch.center.y;
+      pinch = next;
+      draw();
+    }
+    return;
+  }
   pointer = eventPoint(e);
   if (drag) {
     const dx = pointer.x - drag.x,
@@ -680,14 +775,29 @@ canvas.addEventListener("pointermove", (e) => {
   }
 });
 canvas.addEventListener("pointerup", (e) => {
+  touches.delete(e.pointerId);
+  if (pinch) {
+    if (!touches.size) {
+      pinch = null;
+      touchStart = null;
+    }
+    drag = null;
+    return;
+  }
   if (drag && tool === "inspect" && !drag.moved && !drag.panning) {
     const p = eventPoint(e),
       i = cellAt(p.x, p.y);
     if (i >= 0 && world.owner[i] >= 0) selectNation(world.owner[i]);
   }
   drag = null;
+  touchStart = null;
 });
-canvas.addEventListener("pointercancel", () => (drag = null));
+canvas.addEventListener("pointercancel", () => {
+  drag = null;
+  pinch = null;
+  touchStart = null;
+  touches.clear();
+});
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 canvas.addEventListener("pointerleave", () => {
   pointer = null;
@@ -763,6 +873,8 @@ $("#effects").onchange = (e) => {
   draw();
 };
 function newView() {
+  recoveryPending = null;
+  $("#recovery-banner").hidden = true;
   selected = null;
   zoom = 1;
   pan = { x: 0, y: 0 };
@@ -828,30 +940,104 @@ $("#world-form").onsubmit = (e) => {
 };
 $("#help").onclick = () => $("#help-dialog").showModal();
 $("#close-help").onclick = () => $("#help-dialog").close();
-$("#save").onclick = () => {
-  try {
-    localStorage.setItem("world-simulation-save", JSON.stringify(world));
-    toast("World saved in this browser.");
-  } catch {
-    toast("Storage unavailable. Export your world instead.");
-  }
-};
 function restore(input) {
   const validated = validate(input);
   world = validated;
+  recoveryPending = null;
+  $("#recovery-banner").hidden = true;
   newView();
   setRunning(false);
 }
-$("#load").onclick = () => {
+function renderSaves() {
   try {
-    const saved = localStorage.getItem("world-simulation-save");
-    if (!saved) return toast("No saved world yet.");
-    restore(JSON.parse(saved));
-    toast("World loaded. Press Play to continue.");
-  } catch {
-    toast("This save could not be loaded. Your current world is unchanged.");
+    const entries = readSaves(localStorage);
+    $("#save-list").innerHTML =
+      entries
+        .map(
+          (e) =>
+            `<article class="save-slot"><strong>${esc(e.name)}</strong><small>Year ${e.world.year} · ${esc(REAL_MAPS[e.world.preset]?.name || e.world.preset || "Custom map")} · ${e.savedAt ? new Date(e.savedAt).toLocaleString() : "Earlier version"}</small><div class="actions"><button data-save-load="${esc(e.id)}">Load</button><button data-save-replace="${esc(e.id)}">Replace</button><button data-save-delete="${esc(e.id)}">Delete</button></div></article>`,
+        )
+        .join("") ||
+      '<p class="setting-note">Your first adventure deserves a save.</p>';
+    $("#save-form button").disabled = entries.length >= 6;
+  } catch (error) {
+    $("#save-error").textContent = error.message;
+  }
+}
+function openSaves() {
+  $("#save-name").value =
+    `${REAL_MAPS[world.preset]?.name || world.seed} — Year ${world.year}`;
+  $("#save-error").textContent = "";
+  renderSaves();
+  $("#saves-dialog").showModal();
+}
+$("#save").onclick = openSaves;
+$("#load").onclick = openSaves;
+$("#close-saves").onclick = () => $("#saves-dialog").close();
+$("#save-form").onsubmit = (e) => {
+  e.preventDefault();
+  try {
+    saveWorld(localStorage, world, $("#save-name").value);
+    renderSaves();
+    $("#save-error").textContent = "World saved.";
+  } catch (error) {
+    $("#save-error").textContent = `Could not save: ${error.message}`;
   }
 };
+$("#save-list").onclick = (e) => {
+  const button = e.target.closest("button");
+  if (!button) return;
+  try {
+    const entries = readSaves(localStorage);
+    const id =
+      button.dataset.saveLoad ||
+      button.dataset.saveReplace ||
+      button.dataset.saveDelete;
+    const entry = entries.find((s) => s.id === id);
+    if (!entry) return;
+    if (button.dataset.saveLoad) {
+      restore(entry.world);
+      $("#saves-dialog").close();
+      toast("World loaded. Press Play to continue.");
+    }
+    if (button.dataset.saveReplace) {
+      saveWorld(localStorage, world, entry.name, id);
+      $("#save-error").textContent = "Slot replaced with your current world.";
+      renderSaves();
+    }
+    if (button.dataset.saveDelete) {
+      deleteSave(localStorage, id);
+      renderSaves();
+      $("#save-error").textContent = "Save deleted.";
+    }
+  } catch (error) {
+    $("#save-error").textContent =
+      `Could not complete that action: ${error.message}`;
+  }
+};
+function autoSave() {
+  if (recoveryPending || drag || pinch) return;
+  try {
+    writeRecovery(localStorage, world);
+    $("#autosave-status").textContent = "RECOVERY SAVED";
+  } catch {
+    $("#autosave-status").textContent = "RECOVERY UNAVAILABLE";
+  }
+}
+$("#resume-recovery").onclick = () => {
+  if (recoveryPending) restore(recoveryPending.world);
+  toast("Last session recovered. Press Play to continue.");
+};
+$("#dismiss-recovery").onclick = () => {
+  recoveryPending = null;
+  $("#recovery-banner").hidden = true;
+  autoSave();
+};
+setInterval(autoSave, 5000);
+window.addEventListener("pagehide", autoSave);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) autoSave();
+});
 $("#export").onclick = () => {
   const url = URL.createObjectURL(
     new Blob([JSON.stringify(world, null, 2)], { type: "application/json" }),
@@ -891,4 +1077,14 @@ document.addEventListener("keydown", (e) => {
 });
 refresh();
 setTool("spawn");
+try {
+  recoveryPending = readRecovery(localStorage);
+  if (recoveryPending) {
+    $("#recovery-message").textContent =
+      `Continue your last world? Year ${recoveryPending.world.year} · ${recoveryPending.world.nations.length} nations founded`;
+    $("#recovery-banner").hidden = false;
+  }
+} catch {
+  $("#autosave-status").textContent = "RECOVERY UNAVAILABLE";
+}
 requestAnimationFrame(animate);
