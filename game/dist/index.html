@@ -1,7 +1,310 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#172c32"><title>World Simulation — An atlas of unwritten history</title><meta name="description" content="Create a world. Watch kingdoms rise, borders shift, and history unfold in a playable geopolitical sandbox."><link rel="stylesheet" href="style.css"></head><body>
-<header><a class="brand" href="./"><span class="sigil">✧</span><span>WORLD SIMULATION<small>AN ATLAS OF UNWRITTEN HISTORY</small></span></a><div class="header-right"><span class="live"><i></i> LIVING WORLD</span><button id="save">Save world</button><button id="load">Load</button><button class="primary" id="new">＋ New world</button></div></header>
-<main><aside class="left"><div class="eyebrow">THE KNOWN WORLD</div><h1>Empires are fleeting.<br>History is forever.</h1><p class="intro">A world in motion. A story without an author.</p><div class="world-stats"><div><strong id="nation-count">8</strong><span>NATIONS</span></div><div><strong id="population">0</strong><span>PEOPLE</span></div><div><strong id="war-count">0</strong><span>WARS</span></div></div><div class="section-title">WORLD POWERS <span>LAND SHARE</span></div><div id="nations"></div><div class="observer"><span>✧</span><div><b>You are the observer.</b><p>Select a nation to explore its story—or change its destiny.</p></div></div><button id="export" class="wide">↓ Export chronicle & world</button><label class="import">Import a world <input type="file" id="import" accept="application/json,.json"></label></aside>
-<section class="map-panel" aria-label="Interactive world map"><div class="map-toolbar"><div class="tabs"><button class="active" data-layer="political">Political</button><button data-layer="terrain">Terrain</button></div><span id="seed-label"></span><button id="reset-view" title="Reset map view">↺ View</button></div><div class="canvas-wrap"><canvas id="map" aria-label="Map of nations. Select a nation using the world powers list for keyboard access."></canvas><div class="map-caption"><span>TERRA INCOGNITA</span><small>Drag to explore · Scroll to zoom</small></div><div class="compass" aria-hidden="true">N<span>✧</span>S</div><div id="tooltip"></div></div><div class="timeline"><div class="date"><small>THE AGE OF KINGDOMS</small><strong>Year <span id="year">1</span></strong></div><div class="playback"><button id="step" title="Advance one year">↦</button><button id="play" class="primary">Ⅱ Pause</button><div class="speeds"><button class="active" data-speed="1">1×</button><button data-speed="3">3×</button><button data-speed="10">10×</button></div></div><span class="timeline-note">History is unfolding</span></div></section>
-<aside class="right"><div class="section-title">NATION DOSSIER <span>◈</span></div><div id="inspector"><div class="empty-inspector">✧<h2>A closer look</h2><p>Select a kingdom on the map to see the people, power, and politics behind its borders.</p></div></div><div class="section-title chronicle-heading">THE CHRONICLE <span id="event-count"></span></div><div id="events" aria-label="World history"></div></aside></main>
-<footer><span><i></i> A PROCEDURAL WORLD. AN UNWRITTEN FUTURE.</span><span>World Simulation <b> / </b> Sandbox edition</span></footer><div id="toast" role="status"></div>
-<dialog id="new-dialog"><form id="world-form"><div class="eyebrow">A NEW BEGINNING</div><h2>Every world has a story.</h2><p>Choose a seed and let history find its own course.</p><label>World seed<input name="seed" id="seed" value="ELDER-1482" maxlength="60" required></label><label>Founding nations<select name="count"><option value="6">6 — Room to grow</option><option value="8" selected>8 — A delicate balance</option><option value="12">12 — A fractured world</option></select></label><p class="hint">Creating a world replaces the current simulation. Save first to keep it.</p><div class="dialog-actions"><button type="button" id="cancel">Cancel</button><button class="primary" type="submit">Create world ↗</button></div></form></dialog><script type="module" src="app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#111820" />
+    <title>World Simulation — Conflict Sandbox</title>
+    <meta
+      name="description"
+      content="A living world-war sandbox. Spawn nations, paint maps, forge alliances, and watch borders change."
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./"
+        ><span class="brand-icon">◈</span
+        ><span
+          >WORLD<span class="brand-light"> SIMULATION</span
+          ><small>CONFLICT SANDBOX</small></span
+        ></a
+      >
+      <div class="world-summary">
+        <span><b id="nation-count">16</b> nations</span
+        ><span class="war-stat"><b id="war-count">0</b> wars</span
+        ><span><b id="claimed">0%</b> claimed</span>
+      </div>
+      <div class="header-actions">
+        <button id="save">Save</button><button id="load">Load</button
+        ><button id="new" class="primary">＋ New world</button>
+      </div>
+    </header>
+    <main>
+      <section class="battlefield" aria-label="World map and controls">
+        <div class="map-top">
+          <div class="map-tabs" aria-label="Map mode">
+            <button class="active" data-layer="political">Political</button
+            ><button data-layer="diplomacy">Diplomacy</button
+            ><button data-layer="terrain">Terrain</button>
+          </div>
+          <span id="seed-label"></span
+          ><button id="help" title="How to play">?</button>
+        </div>
+        <div class="canvas-wrap">
+          <canvas
+            id="map"
+            tabindex="0"
+            aria-label="World map. Use the nations list to select a nation with the keyboard."
+          ></canvas>
+          <div class="map-tools" aria-label="Map tools">
+            <button
+              class="active"
+              data-tool="inspect"
+              title="Inspect and pan (Escape)"
+            >
+              <span>↖</span><small>Inspect</small></button
+            ><button data-tool="spawn" title="Place a nation on land">
+              <span>⚑</span><small>Spawn</small>
+            </button>
+            <hr />
+            <button
+              data-tool="territory"
+              title="Paint the selected nation's territory"
+            >
+              <span>▧</span><small>Territory</small></button
+            ><button data-tool="land" title="Paint land">
+              <span>▰</span><small>Land</small></button
+            ><button data-tool="water" title="Paint water">
+              <span>≈</span><small>Water</small></button
+            ><button data-tool="erase" title="Erase ownership, keeping land">
+              <span>◇</span><small>Unclaim</small>
+            </button>
+          </div>
+          <div id="brush-control" hidden>
+            <label
+              >Brush
+              <input
+                id="brush"
+                type="range"
+                min="1"
+                max="10"
+                value="3"
+              /><output id="brush-size">3</output></label
+            ><button id="undo" disabled>↶ Undo stroke</button>
+          </div>
+          <div class="map-key">
+            <span><i style="background: #637063"></i>Unclaimed land</span
+            ><span><i class="battle-dot"></i>Active front</span>
+          </div>
+          <div class="zoom-controls">
+            <button id="zoom-in" aria-label="Zoom in">＋</button
+            ><span id="zoom-label">100%</span
+            ><button id="zoom-out" aria-label="Zoom out">−</button
+            ><button id="reset-view" title="Fit map">⌖</button>
+          </div>
+          <div id="tooltip"></div>
+          <div id="tool-hint">
+            Select a nation to inspect it. Drag to pan · Scroll to zoom
+          </div>
+        </div>
+        <div class="transport">
+          <div class="year-block">
+            <span class="status-dot"></span>
+            <div>
+              <small id="simulation-status">SIMULATION RUNNING</small
+              ><strong>Year <span id="year">1</span></strong>
+            </div>
+          </div>
+          <div class="time-controls">
+            <button id="play" class="primary" title="Play or pause (Space)">
+              Ⅱ Pause</button
+            ><button id="step" title="Advance one year">↦</button>
+            <div class="speeds">
+              <button class="active" data-speed="1">1×</button
+              ><button data-speed="3">3×</button
+              ><button data-speed="10">10×</button
+              ><button data-speed="30">30×</button>
+            </div>
+          </div>
+          <button
+            id="world-war"
+            class="danger-outline"
+            title="Declare war between every living nation"
+          >
+            ⚔ World war
+          </button>
+        </div>
+      </section>
+      <aside class="sidebar">
+        <nav class="panel-tabs">
+          <button class="active" data-panel="nations">
+            Nations <span id="list-count"></span></button
+          ><button data-panel="history">History</button
+          ><button data-panel="settings">Settings</button>
+        </nav>
+        <section id="panel-nations" class="panel">
+          <div id="nation-detail" hidden></div>
+          <div class="list-heading">
+            <span>WORLD RANKING</span
+            ><select id="sort" aria-label="Sort nations">
+              <option value="territory">Territory</option>
+              <option value="gold">Gold</option>
+              <option value="strength">Combat strength</option>
+            </select>
+          </div>
+          <div id="nations"></div>
+          <div class="sidebar-note">
+            A world without a script.<br /><span
+              >Let nations compete, or take control.</span
+            >
+          </div>
+          <details id="fallen">
+            <summary>Fallen nations <span id="fallen-count">0</span></summary>
+            <div id="fallen-list"></div>
+          </details>
+        </section>
+        <section id="panel-history" class="panel" hidden>
+          <div class="panel-heading">
+            <h2>World history</h2>
+            <p>Wars, revolutions, and the fall of nations.</p>
+          </div>
+          <div id="events"></div>
+        </section>
+        <section id="panel-settings" class="panel" hidden>
+          <div class="panel-heading">
+            <h2>Simulation rules</h2>
+            <p>Set the rules. Let the world play out.</p>
+          </div>
+          <label class="toggle-row"
+            >Nation AI
+            <input data-setting="ai" type="checkbox" checked /></label
+          ><label class="toggle-row"
+            >Territorial expansion
+            <input data-setting="expansion" type="checkbox" checked /></label
+          ><label class="toggle-row"
+            >Automatic wars
+            <input data-setting="wars" type="checkbox" checked /></label
+          ><label class="toggle-row"
+            >Automatic alliances
+            <input data-setting="alliances" type="checkbox" checked /></label
+          ><label class="toggle-row"
+            >Revolutions
+            <input data-setting="revolts" type="checkbox" checked /></label
+          ><label class="range-label"
+            >War frequency <output id="aggression-value">Normal</output
+            ><input
+              id="aggression"
+              type="range"
+              min="0"
+              max="3"
+              step="0.25"
+              value="1" /></label
+          ><label class="toggle-row"
+            >Nation labels <input id="labels" type="checkbox" checked /></label
+          ><label class="toggle-row"
+            >Battle effects <input id="effects" type="checkbox" checked
+          /></label>
+          <p class="setting-note">
+            Turning off automatic wars prevents new AI declarations. Existing
+            wars continue. Disabling Nation AI freezes expansion, combat, and
+            the economy.
+          </p>
+          <h3>YOUR WORLD</h3>
+          <button id="export" class="full">↓ Export world & history</button
+          ><label class="file-label"
+            >↑ Import world<input
+              type="file"
+              id="import"
+              accept="application/json,.json"
+          /></label>
+          <p class="setting-note">
+            Save stores one world in this browser. Export a file to keep
+            multiple worlds or move between devices.
+          </p>
+        </section>
+        <div class="sidebar-footer">
+          <span class="online-dot"></span> LOCAL SIMULATION
+          <span id="world-size">160 × 100</span>
+        </div>
+      </aside>
+    </main>
+    <div id="toast" role="status"></div>
+    <dialog id="new-dialog">
+      <form id="world-form">
+        <div class="eyebrow">NEW SIMULATION</div>
+        <h1>A world worth fighting for.</h1>
+        <p>Choose your map. Set the stage. Watch history happen.</p>
+        <label
+          >World seed
+          <div class="input-row">
+            <input
+              id="seed"
+              name="seed"
+              value="CONFLICT-2048"
+              maxlength="60"
+              required
+            /><button id="random-seed" type="button" title="Random seed">
+              ↻
+            </button>
+          </div></label
+        ><label
+          >Map type<select id="preset" name="preset">
+            <option value="continents">
+              Continents — connected land and open seas
+            </option>
+            <option value="pangaea">Pangaea — one massive battleground</option>
+            <option value="islands">
+              Archipelago — island nations and naval landings
+            </option>
+            <option value="arena">Arena — all land, constant conflict</option>
+            <option value="blank">Blank canvas — build your own map</option>
+          </select></label
+        >
+        <div class="form-columns">
+          <label
+            >Nations<select name="count">
+              <option value="6">6 nations</option>
+              <option value="12">12 nations</option>
+              <option value="16" selected>16 nations</option>
+              <option value="24">24 nations</option>
+              <option value="32">32 nations</option>
+            </select></label
+          ><label
+            >Starting territory<select name="start">
+              <option value="borders">Established borders</option>
+              <option value="seeds">Small settlements</option>
+            </select></label
+          >
+        </div>
+        <p class="setting-note">
+          Replaces the current world. Save or export it first to keep it.
+        </p>
+        <div class="dialog-actions">
+          <button id="cancel" type="button">Cancel</button
+          ><button class="primary">Generate world ↗</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="help-dialog">
+      <div class="eyebrow">HOW TO PLAY</div>
+      <h1>Your world. Your rules.</h1>
+      <p>
+        Nations claim land, earn gold, form alliances, and fight for territory.
+        Strong economies and combat efficiency help win battles. Long wars lower
+        stability and can trigger revolutions.
+      </p>
+      <ul>
+        <li><b>Inspect:</b> click a nation, or select it from the ranking.</li>
+        <li>
+          <b>God mode:</b> rename, recolor, donate gold, change combat
+          efficiency, force war or peace, ally, annex, revolt, or collapse.
+        </li>
+        <li>
+          <b>Map editor:</b> place nations and paint land, sea, or ownership.
+          Painting pauses time. Undo restores the last stroke.
+        </li>
+        <li>
+          <b>Diplomacy map:</b> green marks allies, red marks enemies of your
+          selected nation.
+        </li>
+        <li>
+          <b>Navigation:</b> drag to pan, scroll to zoom. Space pauses. Escape
+          returns to Inspect.
+        </li>
+      </ul>
+      <button id="close-help" class="primary full">Let history unfold</button>
+    </dialog>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

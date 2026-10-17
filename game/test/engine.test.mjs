@@ -1,5 +1,172 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {createWorld,tick,stats,declareWar,peace,rebel,validate,W,H} from '../dist/engine.js';
-test('seeded worlds reproduce exactly and every founding nation owns its capital',()=>{for(const seed of ['ELDER-1482','ocean','123','mountains']){const a=createWorld(seed,12);assert.deepEqual(a,createWorld(seed,12));assert.equal(a.owner.length,W*H);assert.ok(a.owner.includes(-1));assert.ok(stats(a).every(n=>n>0));a.nations.forEach(n=>assert.equal(a.owner[n.capital],n.id));validate(a);}});
-test('centuries preserve territory, valid ownership, and finite nation statistics',()=>{const s=createWorld();const land=stats(s).reduce((a,b)=>a+b);for(let y=0;y<400;y++){tick(s);validate(s);assert.equal(stats(s).reduce((a,b)=>a+b),land);}assert.equal(s.year,401);assert.ok(s.events.some(e=>e.type==='war'));});
-test('interventions establish war, peace and a new rebel nation',()=>{const s=createWorld();assert.equal(declareWar(s,0,1),true);assert.equal(declareWar(s,1,0),false);assert.equal(s.wars.length,1);peace(s,0);assert.equal(s.wars.length,0);const before=stats(s)[0];assert.equal(rebel(s,0),true);assert.equal(s.nations.length,9);assert.ok(stats(s)[0]<before);assert.ok(stats(s)[8]>0);validate(s);});
-test('save round trip preserves deterministic future and rejects malformed data',()=>{const a=createWorld();tick(a);const b=validate(JSON.parse(JSON.stringify(a)));tick(a);tick(b);assert.deepEqual(a,b);assert.throws(()=>validate({version:1}));b.owner[0]=999;assert.throws(()=>validate(b));});
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  createWorld,
+  tick,
+  stats,
+  declareWar,
+  peace,
+  ally,
+  annex,
+  collapse,
+  rebel,
+  spawnNation,
+  paint,
+  validate,
+  W,
+  H,
+  WATER,
+  NEUTRAL,
+  neighbors,
+} from "../dist/engine.js";
+
+const landCount = (s) => s.owner.filter((n) => n !== WATER).length;
+const owned = (s) => stats(s).reduce((a, b) => a + b, 0);
+
+test("all map presets reproduce from a seed and preserve valid capitals", () => {
+  for (const preset of ["continents", "pangaea", "islands", "arena", "blank"]) {
+    const a = createWorld("test-world", 16, preset);
+    assert.deepEqual(a, createWorld("test-world", 16, preset));
+    assert.equal(a.owner.length, W * H);
+    assert.ok(a.owner.includes(WATER));
+    a.nations.forEach((n) => assert.equal(a.owner[n.capital], n.id));
+    validate(a);
+    if (preset === "blank") assert.equal(a.nations.length, 0);
+  }
+});
+
+test("settlements grow into neutral land and do not turn water into territory", () => {
+  const s = createWorld("expansion", 12, "arena", "seeds");
+  s.settings.wars = false;
+  const before = owned(s),
+    water = s.owner.map((n, i) => (n === WATER ? i : -1)).filter((i) => i >= 0);
+  for (let y = 0; y < 20; y++) tick(s);
+  assert.ok(owned(s) > before * 3);
+  water.forEach((i) => assert.equal(s.owner[i], WATER));
+  validate(s);
+});
+
+test("four centuries of conflict conserve land and keep valid nations and relations", () => {
+  const s = createWorld("CONFLICT-2048", 16);
+  const land = landCount(s);
+  for (let y = 0; y < 400; y++) {
+    tick(s);
+    validate(s);
+    assert.equal(landCount(s), land);
+    s.nations.forEach((n) => {
+      if (stats(s)[n.id]) assert.equal(s.owner[n.capital], n.id);
+    });
+  }
+  assert.equal(s.year, 401);
+  assert.ok(s.events.some((e) => e.type === "war" || e.type === "battle"));
+});
+
+test("war moves borders, alliances stop wars, peace and annexation work", () => {
+  const s = createWorld("arena-battle", 2, "arena");
+  s.settings.wars = false;
+  s.settings.alliances = false;
+  s.settings.revolts = false;
+  assert.equal(declareWar(s, 0, 1), true);
+  assert.equal(declareWar(s, 1, 0), false);
+  const original = [...s.owner];
+  for (let i = 0; i < 10; i++) tick(s);
+  assert.notDeepEqual(s.owner, original);
+  assert.ok(s.flashes.length);
+  ally(s, 0, 1);
+  assert.equal(s.wars.length, 0);
+  assert.deepEqual(s.alliances, [[0, 1]]);
+  declareWar(s, 0, 1);
+  assert.equal(s.alliances.length, 0);
+  peace(s, 0);
+  assert.equal(s.wars.length, 0);
+  const total = owned(s);
+  annex(s, 0, 1);
+  assert.equal(stats(s)[0], total);
+  assert.equal(stats(s)[1], 0);
+  assert.notEqual(s.nations[1].dead, null);
+  validate(s);
+});
+
+test("revolutions produce a connected new country and collapse frees territory", () => {
+  const s = createWorld("rebellion", 2, "arena");
+  assert.equal(rebel(s, 0), true);
+  const id = s.nations.length - 1,
+    cells = s.owner.map((n, i) => (n === id ? i : -1)).filter((i) => i >= 0);
+  const visited = new Set([cells[0]]),
+    queue = [cells[0]];
+  for (let h = 0; h < queue.length; h++)
+    for (const j of neighbors(queue[h]))
+      if (s.owner[j] === id && !visited.has(j)) {
+        visited.add(j);
+        queue.push(j);
+      }
+  assert.equal(visited.size, cells.length);
+  assert.ok(s.wars.some((p) => p[0] === 0 && p[1] === id));
+  collapse(s, id);
+  cells.forEach((i) => assert.equal(s.owner[i], NEUTRAL));
+  assert.equal(stats(s)[id], 0);
+  validate(s);
+});
+
+test("map editing supports land, water, spawning, ownership, erasing and capital relocation", () => {
+  const s = createWorld("editor", 0, "blank"),
+    center = 50 * W + 80;
+  paint(s, center, 10, "land");
+  assert.equal(s.owner[center], NEUTRAL);
+  const id = spawnNation(s, center);
+  assert.equal(id, 0);
+  assert.equal(s.owner[center], id);
+  paint(s, center + 5, 2, "territory", id);
+  assert.equal(s.owner[center + 5], id);
+  paint(s, center, 1, "water");
+  assert.equal(s.owner[center], WATER);
+  assert.notEqual(s.nations[id].capital, center);
+  assert.equal(s.owner[s.nations[id].capital], id);
+  paint(s, center + 5, 1, "erase");
+  assert.equal(s.owner[center + 5], NEUTRAL);
+  assert.equal(spawnNation(s, 0), -1);
+  assert.equal(paint(s, -1, 3, "land"), false);
+  validate(s);
+});
+
+test("paused AI freezes combat, economy and expansion while the clock can advance", () => {
+  const s = createWorld("disabled", 4, "arena", "seeds");
+  declareWar(s, 0, 1);
+  s.settings.ai = false;
+  const before = structuredClone(s);
+  tick(s);
+  assert.deepEqual(s.owner, before.owner);
+  assert.deepEqual(s.nations, before.nations);
+  assert.deepEqual(s.wars, before.wars);
+  assert.equal(s.year, before.year + 1);
+});
+
+test("saves preserve the deterministic future, legacy saves migrate, malformed imports fail", () => {
+  const a = createWorld();
+  tick(a);
+  const b = validate(JSON.parse(JSON.stringify(a)));
+  tick(a);
+  tick(b);
+  assert.deepEqual(a, b);
+  const legacy = createWorld("old", 8);
+  legacy.version = 1;
+  delete legacy.settings;
+  legacy.nations.forEach((n) => {
+    for (const k of ["efficiency", "peak", "kills", "born", "dead"])
+      delete n[k];
+  });
+  const migrated = validate(legacy);
+  assert.equal(migrated.version, 2);
+  tick(migrated);
+  validate(migrated);
+  assert.throws(() => validate({ version: 2 }));
+  const bad = structuredClone(a);
+  bad.owner[0] = 999;
+  assert.throws(() => validate(bad));
+  const fractional = structuredClone(a);
+  fractional.wars = [[0.5, 1, 1]];
+  assert.throws(() => validate(fractional));
+  const invalidSettings = structuredClone(a);
+  invalidSettings.settings.ai = "yes";
+  assert.throws(() => validate(invalidSettings));
+});
