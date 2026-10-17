@@ -70,6 +70,102 @@ function domesticEvent(s, guaranteed = false) {
       9,
       0,
     ],
+    [
+      "hardship",
+      "Fire in the old quarter",
+      `A night watchman raises the alarm in ${n.name}. Neighbors form bucket lines, but rebuilding the crowded streets will draw heavily on public funds.`,
+      -85,
+      -4,
+      0,
+    ],
+    [
+      "prosperity",
+      "The master glassmakers",
+      `Artisans in ${n.name} perfect a clear glass prized by distant buyers. Workshops glow late into the night as orders bring new wealth to the capital.`,
+      90,
+      3,
+      0,
+    ],
+    [
+      "reform",
+      "Maps of the frontier",
+      `Surveyors return to ${n.name} with charts of mountain passes and river crossings. Commanders replace their faded maps and rehearse new supply routes.`,
+      -35,
+      0,
+      7,
+    ],
+    [
+      "hardship",
+      "A winter without end",
+      `Snow seals the roads of ${n.name}. Relief wagons inch toward isolated towns while exhausted garrisons burn their last reserve of firewood.`,
+      -70,
+      -6,
+      -3,
+    ],
+    [
+      "peace",
+      "The open courthouse",
+      `Petitioners in ${n.name} are invited to challenge corrupt officials before public judges. Several powerful families lose favor, but the hearings restore confidence in the law.`,
+      -30,
+      10,
+      0,
+    ],
+    [
+      "prosperity",
+      "The harvest fair",
+      `Full barns bring traders to ${n.name}. The harvest fair spills beyond the city gates, and a modest levy on the crowded stalls fills the treasury.`,
+      75,
+      5,
+      0,
+    ],
+    [
+      "hardship",
+      "Rumors in the palace",
+      `Contradictory orders emerge from the court of ${n.name}. Ministers accuse each other of plotting, and provincial officers hesitate while the capital argues.`,
+      -20,
+      -10,
+      -4,
+    ],
+    [
+      "reform",
+      "The field hospitals",
+      `Surgeons in ${n.name} organize mobile treatment tents and train new attendants. Returning soldiers speak of comrades saved, though the equipment comes at a price.`,
+      -55,
+      3,
+      6,
+    ],
+    [
+      "peace",
+      "The scholar's petition",
+      `Teachers in ${n.name} ask the court to open a public school. A small grant turns an unused hall into classrooms, and families welcome the promise of a different future.`,
+      -40,
+      7,
+      0,
+    ],
+    [
+      "prosperity",
+      "A better waterwheel",
+      `Millwrights in ${n.name} demonstrate a wheel that works even in a gentle current. Flour reaches the markets faster and the court receives a share of the new profits.`,
+      110,
+      2,
+      0,
+    ],
+    [
+      "hardship",
+      "The broken bridge",
+      `The main bridge in ${n.name} gives way under a supply convoy. Ferrymen keep the towns connected while engineers begin expensive repairs.`,
+      -55,
+      -3,
+      -5,
+    ],
+    [
+      "reform",
+      "A common signal",
+      `Messengers in ${n.name} introduce a shared code of flags and beacons. Distant garrisons can now exchange orders without waiting days for a rider.`,
+      -40,
+      0,
+      9,
+    ],
   ];
   const [type, title, story, gold, stability, efficiency] =
     stories[Math.floor(random(s) * stories.length)];
@@ -95,12 +191,14 @@ export function advanceTurn(s, years = 5) {
     throw Error("Choose 1, 5, or 10 years per turn.");
   const startYear = s.year;
   const turnEvents = [];
+  const frames = [];
   const before = stats(s);
   if (!before.some(Boolean))
     throw Error("Place at least one nation before advancing a turn.");
   const owners = [...s.owner],
     gold = s.nations.map((n) => n.wealth);
   for (let i = 0; i < years; i++) {
+    const previousOwners = [...s.owner];
     tick(s);
     domesticEvent(
       s,
@@ -109,6 +207,14 @@ export function advanceTurn(s, years = 5) {
           ["prosperity", "hardship", "reform", "peace"].includes(e.type),
         ),
     );
+    frames.push({
+      year: s.year,
+      changes: s.owner.flatMap((to, cell) =>
+        to === previousOwners[cell]
+          ? []
+          : [{ cell, from: previousOwners[cell], to }],
+      ),
+    });
     turnEvents.push(
       ...s.events.filter((e) => e.year === s.year).map((e) => ({ ...e })),
     );
@@ -154,6 +260,7 @@ export function advanceTurn(s, years = 5) {
   return {
     year: s.year,
     startYear,
+    frames,
     years,
     claimed,
     transferred,

@@ -185,6 +185,7 @@ export function createWorld(
       }
     }
   }
+  if (start === "borders") claimUnownedLand(s);
   reconcile(s);
   s.nations.forEach((n) => {
     n.population = stats(s)[n.id] * 300;
@@ -247,6 +248,50 @@ export function spawnNation(s, cell, { quiet = false, radius = 3, name } = {}) {
   if (!quiet) log(s, `${s.nations[id].name} is founded.`, "birth");
   return id;
 }
+// Claim all remaining land, including islands disconnected from any capital.
+export function claimUnownedLand(s) {
+  const owned = s.owner.flatMap((id, cell) => (id >= 0 ? [cell] : []));
+  if (!owned.length) return;
+  const queue = [...owned];
+  for (let head = 0; head < queue.length; head++) {
+    const cell = queue[head];
+    for (const next of neighbors(cell))
+      if (s.owner[next] === NEUTRAL) {
+        s.owner[next] = s.owner[cell];
+        queue.push(next);
+      }
+  }
+  owned.splice(0, owned.length, ...queue);
+  // Assign each isolated landmass to the nearest established coast, then flood it.
+  for (let cell = 0; cell < s.owner.length; cell++) {
+    if (s.owner[cell] !== NEUTRAL) continue;
+    let closest = owned[0],
+      best = Infinity;
+    for (const coast of owned) {
+      const d = distance(cell, coast);
+      if (d < best) {
+        best = d;
+        closest = coast;
+      }
+    }
+    s.owner[cell] = s.owner[closest];
+    const island = [cell];
+    for (let head = 0; head < island.length; head++) {
+      for (const next of neighbors(island[head]))
+        if (s.owner[next] === NEUTRAL) {
+          s.owner[next] = s.owner[cell];
+          island.push(next);
+        }
+    }
+  }
+  reconcile(s);
+  const sizes = stats(s);
+  s.nations.forEach((n) => {
+    n.population = sizes[n.id] * 300;
+    n.peak = Math.max(n.peak, sizes[n.id]);
+  });
+}
+
 export function reconcile(s) {
   const counts = stats(s);
   s.nations.forEach((n, id) => {

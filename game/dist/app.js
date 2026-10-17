@@ -52,6 +52,8 @@ let zoom = 1,
   undoSnapshot = null;
 let recoveryPending = null;
 let lastTurn = null;
+let pendingTurn = null;
+let borderAnimation = null;
 let toastTimer,
   lastPaint = 0,
   showLabels = true,
@@ -566,10 +568,11 @@ $("#auto-place").onclick = () => {
   renderTurn();
   sound.play("settle");
   toast(
-    `${added} countries placed. Advance a turn to see their stories unfold.`,
+    `${added} countries placed and all land claimed. Advance a turn to see their stories unfold.`,
   );
 };
 function nextTurn() {
+  if (pendingTurn) return;
   if (document.querySelector("dialog[open]") || drag || pinch) return;
   if (!counts.some(Boolean)) {
     setTool(world.preset === "blank" ? "land" : "spawn");
@@ -577,20 +580,79 @@ function nextTurn() {
     return;
   }
   setTool("inspect");
-  lastTurn = advanceTurn(world, Number($("#turn-years").value));
-  sound.play(
-    lastTurn.transferred ||
-      lastTurn.events.some((e) => ["war", "fall", "battle"].includes(e.type))
-      ? "conflict"
-      : "turn",
-  );
+  autoSave();
+  const future = structuredClone(world);
+  const report = advanceTurn(future, Number($("#turn-years").value));
+  pendingTurn = { future, report, before: [...world.owner], eventIndex: 0 };
+  showTurnEvent();
+  $("#event-dialog").showModal();
+}
+function showTurnEvent() {
+  const { report, eventIndex } = pendingTurn;
+  const events = [...report.events].sort((a, b) => a.year - b.year);
+  const event = events[eventIndex];
+  $("#event-progress").textContent = event
+    ? `EVENT ${eventIndex + 1} OF ${events.length} · YEAR ${event.year}`
+    : "A QUIET CHAPTER";
+  $("#event-title").textContent = event
+    ? event.text.split(". ")[0]
+    : "The borders await";
+  $("#event-story").textContent = event
+    ? event.text.split(". ").slice(1).join(". ")
+    : "No major events were recorded. Continue to see how the map changed.";
+  $("#event-continue").textContent =
+    eventIndex < events.length - 1 ? "Next event →" : "Watch borders change →";
+}
+$("#event-dialog").addEventListener("cancel", (e) => e.preventDefault());
+$("#event-continue").onclick = () => {
+  if (!pendingTurn) return;
+  if (++pendingTurn.eventIndex < pendingTurn.report.events.length) {
+    showTurnEvent();
+    return;
+  }
+  $("#event-dialog").close();
+  startBorderAnimation();
+};
+function startBorderAnimation() {
+  const { future, report, before } = pendingTurn;
+  world = structuredClone(future);
+  world.owner = [...before];
+  lastTurn = null;
   undoSnapshot = null;
   $("#undo").disabled = true;
+  $("main").inert = true;
+  $(".topbar").inert = true;
+  $("#border-playback").hidden = false;
+  sound.play(report.transferred ? "conflict" : "turn");
+  const steps = report.frames.flatMap((frame) => frame.changes);
+  borderAnimation = {
+    steps,
+    cursor: 0,
+    start: performance.now(),
+    duration: matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? 300
+      : Math.min(6500, Math.max(1800, steps.length * 3)),
+  };
+  rebuildMap();
+  draw();
+}
+function finishBorderAnimation() {
+  if (!pendingTurn) return;
+  world = pendingTurn.future;
+  lastTurn = pendingTurn.report;
+  pendingTurn = null;
+  borderAnimation = null;
+  $("main").inert = false;
+  $(".topbar").inert = false;
+  $("#border-playback").hidden = true;
   refresh();
   renderTurn();
   switchPanel("turn");
   autoSave();
+  $("#next-turn").focus();
 }
+$("#finish-animation").onclick = finishBorderAnimation;
+
 $("#next-turn").onclick = nextTurn;
 $("#review-turn").onclick = () => {
   renderTurn();
@@ -617,6 +679,21 @@ $("#turn-report").onclick = (e) => {
   }
 };
 function animate(now) {
+  if (borderAnimation) {
+    const animation = borderAnimation;
+    const progress = Math.min(1, (now - animation.start) / animation.duration);
+    const target = Math.floor(animation.steps.length * progress);
+    while (animation.cursor < target) {
+      const change = animation.steps[animation.cursor++];
+      world.owner[change.cell] = change.to;
+    }
+    $("#border-progress").textContent =
+      `Borders changing · ${Math.round(progress * 100)}%`;
+    rebuildMap();
+    draw(now);
+    if (progress === 1) finishBorderAnimation();
+  }
+
   if (
     (showEffects && world.flashes?.length && now - lastPaint < 720) ||
     (pointer && tool !== "inspect")
@@ -981,7 +1058,7 @@ $("#world-form").onsubmit = (e) => {
     String(data.get("seed")),
     Number(data.get("count")),
     String(data.get("preset")),
-    String(data.get("start") || "seeds"),
+    Number(data.get("count")) > 0 ? "borders" : "seeds",
   );
   $("#new-dialog").close();
   newView();
@@ -1067,7 +1144,7 @@ $("#save-list").onclick = (e) => {
   }
 };
 function autoSave() {
-  if (recoveryPending || drag || pinch) return;
+  if (pendingTurn || recoveryPending || drag || pinch) return;
   try {
     writeRecovery(localStorage, world);
     $("#autosave-status").textContent = "RECOVERY SAVED";
@@ -1113,6 +1190,7 @@ $("#import").onchange = async (e) => {
   e.target.value = "";
 };
 document.addEventListener("keydown", (e) => {
+  if (borderAnimation) return;
   if (document.querySelector("dialog[open]")) return;
   if (e.key === "Escape") {
     setTool("inspect");

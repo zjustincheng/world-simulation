@@ -93,8 +93,37 @@ test("automatic placement preserves terrain and countries and respects capacity"
   validate(s);
   const empty = createWorld("blank", 0, "blank");
   assert.equal(populateWorld(empty), 0);
-  populateWorld(s, 32);
-  populateWorld(s, 32);
-  assert.equal(s.nations.length, 64);
+  assert.equal(s.owner.includes(NEUTRAL), false);
+  assert.equal(s.nations.length, 15);
   assert.equal(populateWorld(s), 0);
+});
+
+test("established borders claim every island on all geographic maps", () => {
+  for (const preset of [
+    "earth",
+    "europe",
+    "asia",
+    "africa",
+    "oceania",
+    "north-america",
+    "south-america",
+    "islands",
+  ]) {
+    const s = createWorld("full-map", 6, preset, "borders");
+    assert.equal(s.owner.includes(NEUTRAL), false, preset);
+    validate(s);
+  }
+});
+
+test("animation frames replay every annual ownership change to the exact final map", () => {
+  const s = createWorld("replay-turn", 12, "arena");
+  const owners = [...s.owner];
+  const report = advanceTurn(s, 10);
+  assert.equal(report.frames.length, 10);
+  for (const frame of report.frames)
+    for (const change of frame.changes) {
+      assert.equal(owners[change.cell], change.from);
+      owners[change.cell] = change.to;
+    }
+  assert.deepEqual(owners, s.owner);
 });

@@ -5,6 +5,7 @@ import {
   random,
   spawnNation,
   stats,
+  claimUnownedLand,
 } from "./engine.js";
 
 // Spread capitals across unclaimed land without stealing existing territory.
@@ -43,5 +44,6 @@ export function populateWorld(s, count = 12) {
     capitals.push(best);
     added++;
   }
+  if (added) claimUnownedLand(s);
   return added;
 }

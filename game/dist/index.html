@@ -156,8 +156,8 @@
               <div class="eyebrow">LET THE WORLD TAKE SHAPE</div>
               <h2>Let the game place countries.</h2>
               <p>
-                Scatter new capitals across unclaimed land on this map. Existing
-                countries stay yours.
+                Divide all land among countries, including islands. Existing
+                countries keep their territory.
               </p>
               <label
                 >Countries to add<select id="auto-count">
@@ -403,7 +403,6 @@
           ><label
             >Starting territory<select name="start">
               <option value="borders">Established borders</option>
-              <option value="seeds">Small settlements</option>
             </select></label
           >
         </div>
@@ -448,5 +447,19 @@
       <button id="close-help" class="primary full">Let history unfold</button>
     </dialog>
     <script type="module" src="app.js"></script>
+    <dialog id="event-dialog" aria-labelledby="event-title">
+      <div id="event-progress" class="eyebrow"></div>
+      <h1 id="event-title"></h1>
+      <p id="event-story"></p>
+      <p class="setting-note">
+        The map stays still while you read. After the last event, watch the
+        borders change.
+      </p>
+      <button id="event-continue" class="primary full">Next event →</button>
+    </dialog>
+    <div id="border-playback" hidden role="status">
+      <strong id="border-progress">Borders changing</strong
+      ><button id="finish-animation">Skip animation</button>
+    </div>
   </body>
 </html>
