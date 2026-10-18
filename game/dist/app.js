@@ -54,6 +54,7 @@ let recoveryPending = null;
 let lastTurn = null;
 let pendingTurn = null;
 let borderAnimation = null;
+let lastPlayback = null;
 let toastTimer,
   lastPaint = 0,
   showLabels = true,
@@ -208,6 +209,15 @@ function draw(now = performance.now()) {
       ctx.fillRect(x, y, 1, 1);
       ctx.strokeRect(x + 0.1, y + 0.1, 0.8, 0.8);
     }
+  }
+  if (borderAnimation) {
+    const recent = borderAnimation.steps.slice(
+      Math.max(0, borderAnimation.cursor - 45),
+      borderAnimation.cursor,
+    );
+    ctx.fillStyle = "#fff3b6aa";
+    for (const change of recent)
+      ctx.fillRect(change.cell % W, Math.floor(change.cell / W), 1, 1);
   }
   if (showEffects) {
     ctx.strokeStyle = "#ffe2a5";
@@ -591,6 +601,8 @@ function showTurnEvent() {
   const { report, eventIndex } = pendingTurn;
   const events = [...report.events].sort((a, b) => a.year - b.year);
   const event = events[eventIndex];
+  $("#event-back").disabled = eventIndex === 0;
+  $("#event-skip").hidden = eventIndex >= events.length - 1;
   $("#event-progress").textContent = event
     ? `EVENT ${eventIndex + 1} OF ${events.length} · YEAR ${event.year}`
     : "A QUIET CHAPTER";
@@ -613,6 +625,27 @@ $("#event-continue").onclick = () => {
   $("#event-dialog").close();
   startBorderAnimation();
 };
+$("#event-back").onclick = () => {
+  if (pendingTurn && pendingTurn.eventIndex > 0) {
+    pendingTurn.eventIndex--;
+    showTurnEvent();
+  }
+};
+$("#event-skip").onclick = () => {
+  $("#event-dialog").close();
+  startBorderAnimation();
+};
+$("#pause-animation").onclick = () => {
+  if (!borderAnimation) return;
+  if (borderAnimation.pausedAt !== null) {
+    borderAnimation.start += performance.now() - borderAnimation.pausedAt;
+    borderAnimation.pausedAt = null;
+    $("#pause-animation").textContent = "Pause";
+  } else {
+    borderAnimation.pausedAt = performance.now();
+    $("#pause-animation").textContent = "Resume";
+  }
+};
 function startBorderAnimation() {
   const { future, report, before } = pendingTurn;
   world = structuredClone(future);
@@ -624,9 +657,13 @@ function startBorderAnimation() {
   $(".topbar").inert = true;
   $("#border-playback").hidden = false;
   sound.play(report.transferred ? "conflict" : "turn");
-  const steps = report.frames.flatMap((frame) => frame.changes);
+  const steps = report.frames.flatMap((frame) =>
+    frame.changes.map((change) => ({ ...change, year: frame.year })),
+  );
+  $("#pause-animation").textContent = "Pause";
   borderAnimation = {
     steps,
+    pausedAt: null,
     cursor: 0,
     start: performance.now(),
     duration: matchMedia("(prefers-reduced-motion: reduce)").matches
@@ -638,7 +675,13 @@ function startBorderAnimation() {
 }
 function finishBorderAnimation() {
   if (!pendingTurn) return;
-  world = pendingTurn.future;
+  if (!pendingTurn.replay)
+    lastPlayback = {
+      before: [...pendingTurn.before],
+      future: structuredClone(pendingTurn.future),
+      report: pendingTurn.report,
+    };
+  world = pendingTurn.returnWorld || pendingTurn.future;
   lastTurn = pendingTurn.report;
   pendingTurn = null;
   borderAnimation = null;
@@ -669,9 +712,18 @@ function renderTurn() {
     .filter((n) => n.delta !== 0)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   $("#turn-report").innerHTML =
-    `<div class="eyebrow">${lastTurn.years}-YEAR CHAPTER</div><h2>${lastTurn.years === 1 ? `Year ${lastTurn.year}` : `Years ${lastTurn.startYear + 1}–${lastTurn.year}`}</h2><p class="turn-headline">${esc(lastTurn.headline.split(". ")[0])}</p><div class="turn-totals"><div><strong>${lastTurn.claimed}</strong><span>NEWLY SETTLED</span></div><div><strong>${lastTurn.transferred}</strong><span>CHANGED HANDS</span></div><div><strong>${lastTurn.events.length}</strong><span>EVENTS</span></div></div><h3>THIS TURN'S EVENTS</h3>${lastTurn.events.map((e) => `<article class="turn-event ${["war", "battle", "fall", "hardship"].includes(e.type) ? "conflict" : "peace"}"><span>YEAR ${e.year} · ${esc(e.type.toUpperCase())}</span><h4>${esc(e.text.split(". ")[0])}</h4><p>${esc(e.text.split(". ").slice(1).join(". ") || "A new chapter in the history of this world.")}</p></article>`).join("") || '<p class="setting-note">No major events in this chapter.</p>'}<h3>TERRITORY CHANGES</h3>${movers.map((n) => `<button class="turn-nation" data-turn-nation="${n.id}"><i class="flag" style="background:${n.color}"></i><span>${esc(n.name)}<small>${n.before} → ${n.after} tiles</small></span><b class="${n.delta > 0 ? "gain" : "loss"}">${n.delta > 0 ? "+" : ""}${n.delta}</b></button>`).join("") || '<p class="setting-note">All borders held this turn.</p>'}<p class="setting-note">Green outlines show new settlements; amber marks land that changed hands. Toggle “Changes” above the map to compare. Take your time—nothing moves until the next turn.</p>`;
+    `<div class="eyebrow">${lastTurn.years}-YEAR CHAPTER</div><h2>${lastTurn.years === 1 ? `Year ${lastTurn.year}` : `Years ${lastTurn.startYear + 1}–${lastTurn.year}`}</h2><p class="turn-headline">${esc(lastTurn.headline.split(". ")[0])}</p><div class="turn-totals"><div><strong>${lastTurn.claimed}</strong><span>NEWLY SETTLED</span></div><div><strong>${lastTurn.transferred}</strong><span>CHANGED HANDS</span></div><div><strong>${lastTurn.events.length}</strong><span>EVENTS</span></div></div><button id="replay-turn" class="full">↻ Replay border changes</button><h3>THIS TURN'S EVENTS</h3>${lastTurn.events.map((e) => `<article class="turn-event ${["war", "battle", "fall", "hardship"].includes(e.type) ? "conflict" : "peace"}"><span>YEAR ${e.year} · ${esc(e.type.toUpperCase())}</span><h4>${esc(e.text.split(". ")[0])}</h4><p>${esc(e.text.split(". ").slice(1).join(". ") || "A new chapter in the history of this world.")}</p></article>`).join("") || '<p class="setting-note">No major events in this chapter.</p>'}<h3>TERRITORY CHANGES</h3>${movers.map((n) => `<button class="turn-nation" data-turn-nation="${n.id}"><i class="flag" style="background:${n.color}"></i><span>${esc(n.name)}<small>${n.before} → ${n.after} tiles</small></span><b class="${n.delta > 0 ? "gain" : "loss"}">${n.delta > 0 ? "+" : ""}${n.delta}</b></button>`).join("") || '<p class="setting-note">All borders held this turn.</p>'}<p class="setting-note">Green outlines show new settlements; amber marks land that changed hands. Toggle “Changes” above the map to compare. Take your time—nothing moves until the next turn.</p>`;
 }
 $("#turn-report").onclick = (e) => {
+  if (e.target.closest("#replay-turn") && lastPlayback && !pendingTurn) {
+    pendingTurn = {
+      ...lastPlayback,
+      replay: true,
+      returnWorld: structuredClone(world),
+    };
+    startBorderAnimation();
+    return;
+  }
   const b = e.target.closest("[data-turn-nation]");
   if (b) {
     setTool("inspect");
@@ -679,7 +731,7 @@ $("#turn-report").onclick = (e) => {
   }
 };
 function animate(now) {
-  if (borderAnimation) {
+  if (borderAnimation && borderAnimation.pausedAt === null) {
     const animation = borderAnimation;
     const progress = Math.min(1, (now - animation.start) / animation.duration);
     const target = Math.floor(animation.steps.length * progress);
@@ -687,8 +739,12 @@ function animate(now) {
       const change = animation.steps[animation.cursor++];
       world.owner[change.cell] = change.to;
     }
-    $("#border-progress").textContent =
-      `Borders changing · ${Math.round(progress * 100)}%`;
+    const year =
+      animation.steps[Math.max(0, animation.cursor - 1)]?.year ||
+      pendingTurn.report.year;
+    $("#border-progress").textContent = animation.steps.length
+      ? `Year ${year} · ${Math.round(progress * 100)}%`
+      : "No borders changed";
     rebuildMap();
     draw(now);
     if (progress === 1) finishBorderAnimation();
@@ -1001,6 +1057,7 @@ $("#effects").onchange = (e) => {
   draw();
 };
 function newView() {
+  lastPlayback = null;
   lastTurn = null;
   renderTurn();
   recoveryPending = null;

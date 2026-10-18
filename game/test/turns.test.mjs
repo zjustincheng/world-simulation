@@ -127,3 +127,20 @@ test("animation frames replay every annual ownership change to the exact final m
     }
   assert.deepEqual(owners, s.owner);
 });
+
+test("territory dispatches report actual annual tile counts", () => {
+  const s = createWorld("dispatches", 6, "arena", "seeds");
+  const report = advanceTurn(s);
+  for (const frame of report.frames) {
+    const dispatch = report.events.find(
+      (e) => e.year === frame.year && e.type === "expansion",
+    );
+    assert.ok(dispatch);
+    const count = Number(dispatch.text.match(/over (\d+) unclaimed/)[1]);
+    const totals = new Map();
+    for (const c of frame.changes)
+      if (c.from === NEUTRAL && c.to >= 0)
+        totals.set(c.to, (totals.get(c.to) || 0) + 1);
+    assert.equal(count, Math.max(...totals.values()));
+  }
+});

@@ -455,11 +455,18 @@
         The map stays still while you read. After the last event, watch the
         borders change.
       </p>
-      <button id="event-continue" class="primary full">Next event →</button>
+      <div class="event-navigation">
+        <button id="event-back">← Back</button
+        ><button id="event-continue" class="primary">Next event →</button>
+      </div>
+      <button id="event-skip" class="full">
+        Skip to map · events stay in the report
+      </button>
     </dialog>
     <div id="border-playback" hidden role="status">
       <strong id="border-progress">Borders changing</strong
-      ><button id="finish-animation">Skip animation</button>
+      ><button id="pause-animation">Pause</button
+      ><button id="finish-animation">Finish</button>
     </div>
   </body>
 </html>

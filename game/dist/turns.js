@@ -207,16 +207,37 @@ export function advanceTurn(s, years = 5) {
           ["prosperity", "hardship", "reform", "peace"].includes(e.type),
         ),
     );
-    frames.push({
-      year: s.year,
-      changes: s.owner.flatMap((to, cell) =>
-        to === previousOwners[cell]
-          ? []
-          : [{ cell, from: previousOwners[cell], to }],
-      ),
-    });
+    const annualChanges = s.owner.flatMap((to, cell) =>
+      to === previousOwners[cell]
+        ? []
+        : [{ cell, from: previousOwners[cell], to }],
+    );
+    const campaigns = new Map();
+    for (const change of annualChanges) {
+      if (change.to < 0) continue;
+      const key = `${change.from},${change.to}`;
+      campaigns.set(key, (campaigns.get(key) || 0) + 1);
+    }
+    // The largest actual territorial movement becomes a dispatch, never an invented battle.
+    const largest = [...campaigns].sort((a, b) => b[1] - a[1])[0];
+    if (largest) {
+      const [from, to] = largest[0].split(",").map(Number),
+        tiles = largest[1];
+      const winner = s.nations[to];
+      log(
+        s,
+        from >= 0
+          ? `The frontier shifts. ${winner.name} takes ${tiles} tiles from ${s.nations[from].name} during this year's fighting. Cartographers redraw the frontier as the balance of territory changes.`
+          : `A new frontier opens. Settlers from ${winner.name} establish control over ${tiles} unclaimed tiles this year. New communities bring more land under the capital's authority.`,
+        from >= 0 ? "battle" : "expansion",
+      );
+    }
+    frames.push({ year: s.year, changes: annualChanges });
     turnEvents.push(
-      ...s.events.filter((e) => e.year === s.year).map((e) => ({ ...e })),
+      ...s.events
+        .filter((e) => e.year === s.year)
+        .map((e) => ({ ...e }))
+        .reverse(),
     );
   }
   const after = stats(s),

@@ -1713,3 +1713,37 @@ dialog label > select {
     width: 165px;
   }
 }
+.event-navigation {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+.event-navigation .primary {
+  flex: 1;
+}
+#event-skip {
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--muted);
+}
+#replay-turn {
+  margin: 0 0 18px;
+  color: var(--accent);
+}
+#border-progress {
+  width: 160px;
+}
+#pause-animation {
+  min-width: 76px;
+}
+@media (max-width: 650px) {
+  #border-progress {
+    width: 110px;
+  }
+  #border-playback {
+    gap: 6px;
+  }
+  #pause-animation {
+    min-width: 65px;
+  }
+}
