@@ -1771,3 +1771,56 @@ dialog label > select {
 .turn-event.crisis {
   border-left-color: #d9b77b;
 }
+#event-dialog {
+  max-width: 720px;
+}
+.world-roundup {
+  margin: 20px 0;
+  text-align: left;
+}
+.world-roundup details {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+.world-roundup summary {
+  cursor: pointer;
+  color: #b9dec9;
+  font-size: 13px;
+}
+.roundup-item {
+  margin: 12px 0;
+  padding: 12px;
+  background: #ffffff05;
+  border-left: 2px solid #709589;
+  border-radius: 3px;
+}
+.roundup-item strong {
+  font-size: 13px;
+}
+.world-roundup p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+#event-dialog .event-navigation {
+  position: sticky;
+  bottom: -32px;
+  background: #1c2c35;
+  padding: 12px 0;
+}
+@media (max-width: 650px) {
+  #event-dialog .event-navigation {
+    bottom: -22px;
+  }
+}
+#event-dialog {
+  width: min(720px, 92vw);
+  max-width: 92vw;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.roundup-item,
+.world-roundup summary {
+  overflow-wrap: anywhere;
+}

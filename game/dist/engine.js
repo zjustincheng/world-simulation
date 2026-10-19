@@ -721,7 +721,7 @@ export function tick(s) {
           target,
           winner,
           loser,
-          Math.max(1, Math.floor((3 + random(s) * 10) * resistance)),
+          Math.max(1, Math.floor((7 + random(s) * 20) * resistance)),
         );
       }
     } else if (s.year % 4 === 0 && coasts[a].length && coasts[b].length) {

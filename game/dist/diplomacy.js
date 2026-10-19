@@ -180,14 +180,14 @@ export function diplomacyTick(s, borders, coasts, sizes) {
 }
 export function considerSettlement(s, a, b, started, sizes) {
   const age = s.year - started;
-  if (age < 6) return;
+  if (age < 8) return;
   const record = (s.warHistory || []).findLast(
     (r) => r.ended === null && r.a === a && r.b === b,
   );
   const initial = record?.initial || [sizes[a], sizes[b]];
   const gains = s.warStats?.[keyOf(a, b)] || [0, 0];
   const decisive =
-    Math.abs(gains[0] - gains[1]) >= Math.max(20, Math.min(...initial) * 0.18);
+    Math.abs(gains[0] - gains[1]) >= Math.max(20, Math.min(...initial) * 0.35);
   const exhausted = [a, b].some(
     (id) => s.nations[id].wealth < 25 || s.nations[id].stability < 35,
   );

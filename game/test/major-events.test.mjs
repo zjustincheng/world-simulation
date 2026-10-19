@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createWorld, validate, declareWar } from "../dist/engine.js";
+import { createWorld, validate, declareWar, ally } from "../dist/engine.js";
 import { advanceToMajorEvent } from "../dist/turns.js";
 function scenario() {
   const s = createWorld("major-events", 2, "arena");
@@ -12,22 +12,30 @@ function scenario() {
   });
   return s;
 }
-test("event progression stops at a diplomatic milestone rather than a selected year count", () => {
+test("world chapters continue beyond early notices to a substantial outcome", () => {
   const s = scenario();
   s.nations[0].aggression = 0.95;
   const report = advanceToMajorEvent(s);
   assert.equal(report.events.length, 1);
   assert.equal(report.milestone, "development");
-  assert.equal(report.events[0].type, "crisis");
-  assert.ok(report.years > 1 && report.years < 30);
-  assert.equal(s.wars.length, 0);
+  assert.ok(report.years > 6 && report.years <= 60);
+  assert.ok(
+    report.transferred > 0 || s.warHistory.some((r) => r.ended !== null),
+  );
+  assert.ok(report.roundup.wars.length > 0);
+  assert.ok(report.roundup.wars.every((w) => w.text.startsWith("War ended")));
+  for (const war of s.warHistory.filter((r) => r.started > report.startYear)) {
+    assert.ok(war.ended !== null);
+    assert.ok(report.frames.some((f) => f.year === war.started));
+    assert.ok(report.frames.some((f) => f.year === war.ended));
+  }
   assert.match(report.events[0].text, /years have passed/);
 });
 test("quiet worlds return a calm-era summary and disabled AI does not advance", () => {
   const s = scenario();
   const report = advanceToMajorEvent(s);
   assert.equal(report.milestone, "quiet");
-  assert.equal(report.years, 30);
+  assert.equal(report.years, 60);
   assert.match(report.events[0].text, /No major political turning point/);
   s.settings.ai = false;
   const before = structuredClone(s);
@@ -60,7 +68,9 @@ test("settlement summaries and expansion milestones are reachable without year c
   for (let i = 0; i < 30; i++) {
     const report = advanceToMajorEvent(s);
     if (s.warHistory[0].ended) {
-      assert.match(report.events[0].text, /settlement|war ends|fallen/i);
+      assert.ok(
+        report.roundup.wars.some((w) => w.text.startsWith("War ended")),
+      );
       found = true;
       break;
     }
@@ -70,4 +80,33 @@ test("settlement summaries and expansion milestones are reachable without year c
   expanding.settings.wars = false;
   expanding.settings.revolts = false;
   assert.equal(advanceToMajorEvent(expanding).milestone, "expansion");
+});
+
+test("world roundup includes simultaneous conflicts and alliances across countries", () => {
+  const s = createWorld("world-roundup", 4, "arena");
+  s.settings.wars = false;
+  s.settings.revolts = false;
+  ally(s, 0, 2);
+  declareWar(s, 0, 1, { reason: "a western border dispute" });
+  declareWar(s, 2, 3, { reason: "an eastern independence claim" });
+  const owners = [...s.owner];
+  const report = advanceToMajorEvent(s);
+  assert.equal(report.roundup.wars.length, 2);
+  assert.ok(report.roundup.wars.every((w) => w.text.startsWith("War ended")));
+  assert.ok(report.roundup.wars.some((w) => w.text.includes("western border")));
+  assert.ok(
+    report.roundup.wars.some((w) => w.text.includes("eastern independence")),
+  );
+  assert.ok(
+    report.roundup.alliances.some(
+      (a) =>
+        a.title.includes(s.nations[0].name) &&
+        a.title.includes(s.nations[2].name),
+    ),
+  );
+  assert.ok(report.years >= 6);
+  assert.ok(report.transferred > 40);
+  for (const change of report.changes) owners[change.cell] = change.to;
+  assert.deepEqual(owners, s.owner);
+  validate(s);
 });

@@ -314,11 +314,12 @@ export function advanceToMajorEvent(s) {
   const startYear = s.year,
     owners = [...s.owner],
     gold = s.nations.map((n) => n.wealth);
+  const alliancesBefore = new Set(s.alliances.map((p) => p.join(",")));
   const frames = [],
     developments = [];
   let milestone = "quiet";
   if (s.settings.ai)
-    for (let elapsed = 1; elapsed <= 30; elapsed++) {
+    for (let elapsed = 1; elapsed <= 60; elapsed++) {
       const previous = [...s.owner];
       tick(s);
       domesticEvent(s);
@@ -336,10 +337,6 @@ export function advanceToMajorEvent(s) {
           to === previous[cell] ? [] : [{ cell, from: previous[cell], to }],
         ),
       });
-      if (important.length) {
-        milestone = "development";
-        break;
-      }
       const changed = s.owner.reduce(
         (sum, to, cell) =>
           sum + (to !== owners[cell] && to >= 0 && owners[cell] >= 0 ? 1 : 0),
@@ -351,13 +348,36 @@ export function advanceToMajorEvent(s) {
       );
       // Campaigns collect several years of skirmishes into a meaningful net shift.
       if (
-        elapsed >= 3 &&
-        changed >= Math.max(40, before.reduce((a, b) => a + b, 0) * 0.025)
+        !s.wars.length &&
+        elapsed >= 6 &&
+        changed >= Math.max(120, before.reduce((a, b) => a + b, 0) * 0.08)
       ) {
         milestone = "campaign";
         break;
       }
-      if (settled >= Math.max(100, before.reduce((a, b) => a + b, 0) * 0.25)) {
+      const resolved = (s.warHistory || []).filter(
+        (r) => r.ended !== null && r.ended > startYear,
+      );
+      if (
+        resolved.length &&
+        (!s.wars.length ||
+          resolved.length >= 2 ||
+          before.filter(Boolean).length <= 3)
+      ) {
+        milestone = "development";
+        break;
+      }
+      if (
+        important.some((e) => e.type === "fall" || e.type === "birth") &&
+        changed >= 60
+      ) {
+        milestone = "development";
+        break;
+      }
+      if (
+        !s.wars.length &&
+        settled >= Math.max(250, before.reduce((a, b) => a + b, 0) * 0.5)
+      ) {
         milestone = "expansion";
         break;
       }
@@ -382,31 +402,86 @@ export function advanceToMajorEvent(s) {
     (a, b) => priority.indexOf(a.type) - priority.indexOf(b.type),
   );
   const main = developments[0];
-  const title = main
-    ? main.text.split(". ")[0]
-    : milestone === "campaign"
-      ? "A campaign reshapes the frontier"
-      : milestone === "expansion"
-        ? "An era of settlement"
-        : s.settings.ai
-          ? "An era of relative calm"
-          : "History is paused";
+  if (milestone === "quiet" && developments.length) milestone = "development";
+  const wars = (s.warHistory || [])
+    .filter(
+      (r) => r.started > startYear || r.ended === null || r.ended > startYear,
+    )
+    .map((r) => ({
+      title: `${s.nations[r.a].name} vs ${s.nations[r.b].name}`,
+      text: `${r.ended === null ? (r.started > startYear ? "New war · ongoing" : "Ongoing war") : "War ended"} · Years ${r.started}–${r.ended ?? s.year}. Cause: ${r.reason}. ${r.outcome || "No settlement has been reached."}`,
+      year: r.ended ?? s.year,
+    }));
+  for (const [a, b, started] of s.wars)
+    if (
+      !(s.warHistory || []).some(
+        (r) => r.a === a && r.b === b && r.ended === null,
+      )
+    )
+      wars.push({
+        title: `${s.nations[a].name} vs ${s.nations[b].name}`,
+        text: `Ongoing since year ${started}. The original cause was not recorded in this older world.`,
+        year: s.year,
+      });
+  const alliances = s.alliances.map(([a, b]) => ({
+    title: `${s.nations[a].name} & ${s.nations[b].name}`,
+    text: alliancesBefore.has(`${a},${b}`)
+      ? "Alliance remains in force."
+      : "A new alliance now joins these countries.",
+    year: s.year,
+  }));
+  const allianceEvents = developments.filter((e) =>
+    /alliance|compact|annex|union/i.test(e.text),
+  );
+  const politics = developments.filter(
+    (e) => e.type === "birth" || e.type === "fall",
+  );
+  const crises = Object.values(s.relations || {})
+    .filter(
+      (r) =>
+        r.reason &&
+        r.tension >= 24 &&
+        after[r.a] &&
+        after[r.b] &&
+        !s.wars.some((p) => p[0] === r.a && p[1] === r.b),
+    )
+    .map((r) => ({
+      title: `${s.nations[r.a].name} & ${s.nations[r.b].name}`,
+      text: `${r.stage >= 3 ? "Mobilization" : r.stage >= 2 ? "Negotiations" : "Dispute"}: ${r.reason}. Tension ${Math.round(r.tension)}/100.`,
+      year: s.year,
+    }));
+  const diplomacy = developments.filter(
+    (e) => ["crisis", "peace"].includes(e.type) && !allianceEvents.includes(e),
+  );
+  const roundup = {
+    wars,
+    alliances,
+    allianceEvents,
+    politics,
+    crises,
+    diplomacy,
+  };
+  const title = !s.settings.ai
+    ? "History is paused"
+    : wars.length > 1
+      ? "Wars redraw the world"
+      : wars.length
+        ? "A campaign changes the balance"
+        : politics.length
+          ? "New states and shifting borders"
+          : milestone === "expansion"
+            ? "An era of settlement"
+            : developments.length
+              ? "A changing diplomatic order"
+              : "An era of relative calm";
   const elapsed = s.year - startYear;
   const time = elapsed
     ? `${elapsed === 1 ? "One year has" : `${elapsed} years have`} passed since the last event.`
     : "Nation AI is disabled. Enable it in Settings to advance history.";
-  const account = main
-    ? [...new Set(developments.slice(0, 3).map((e) => e.text))].join(" ") +
-      (developments.length > 3
-        ? ` Another ${developments.length - 3} developments are recorded in History.`
-        : "")
-    : milestone === "campaign"
-      ? "Several seasons of fighting have produced a substantial shift in the balance of territory."
-      : milestone === "expansion"
-        ? "Continued settlement brings a substantial area of unclaimed land under national administration."
-        : s.settings.ai
-          ? "No major political turning point occurred during this interval. The existing order endured; routine economic and local developments continued."
-          : "";
+  const endedWars = wars.filter((w) => w.text.startsWith("War ended")).length;
+  const account = s.settings.ai
+    ? `${wars.length} ${wars.length === 1 ? "war is accounted for" : "wars are accounted for"} in this period; ${endedWars} concluded and ${s.wars.length} remain active. ${alliances.length} ${alliances.length === 1 ? "alliance remains" : "alliances remain"} in force. ${politics.length ? `${politics.length} changes to statehood are recorded.` : ""} ${developments.length ? "The world roundup below follows developments across all countries." : "No major political turning point occurred; routine economic and local developments continued."}`
+    : "";
   const movers = nations
     .filter((n) => n.delta)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
@@ -421,7 +496,7 @@ export function advanceToMajorEvent(s) {
           "; ",
         )}${movers.length > 3 ? `; ${movers.length - 3} other nations also changed size` : ""}.`
     : " The overall territorial balance is unchanged.";
-  const text = `${title}. ${time} ${main ? account.slice(main.text.split(". ")[0].length + 2) : account}${territory}`;
+  const text = `${title}. ${time} ${account}${territory}`;
   const event = {
     year: s.year,
     type:
@@ -447,5 +522,6 @@ export function advanceToMajorEvent(s) {
     events: [event],
     headline: title,
     milestone,
+    roundup,
   };
 }
