@@ -14,6 +14,7 @@ export const W = 160,
   NEUTRAL = -2,
   MAX_NATIONS = 64;
 export const SEASONS = ["Spring", "Summer", "Autumn", "Winter"];
+export const TECH_PROGRESS_REQUIRED = 18;
 function climateRoll(s, cell, seasonIndex) {
   const y = Math.floor(cell / W),
     latitude = Math.abs(y / H - 0.5) * 2;
@@ -64,6 +65,18 @@ export const TECHNOLOGY_AGES = [
         effect: "Siege trains take more ground after a victory.",
         siege: 0.12,
       },
+      {
+        id: "monastic-schools",
+        name: "Monastic schools",
+        effect: "Scriptoria preserve maps, law, and learning across the realm.",
+        economy: 0.08,
+      },
+      {
+        id: "irrigation",
+        name: "Canal irrigation",
+        effect: "Waterworks improve harvests and state revenue.",
+        economy: 0.12,
+      },
     ],
   },
   {
@@ -92,6 +105,18 @@ export const TECHNOLOGY_AGES = [
         name: "Matchlock companies",
         effect: "Early firearms strengthen disciplined armies.",
         offense: 0.14,
+      },
+      {
+        id: "printing-press",
+        name: "Movable-type printing",
+        effect: "Printed manuals and pamphlets spread ideas more quickly.",
+        economy: 0.1,
+      },
+      {
+        id: "oceanic-charts",
+        name: "Oceanic charts",
+        effect: "Improved navigation strengthens overseas logistics.",
+        siege: 0.06,
       },
     ],
   },
@@ -122,11 +147,59 @@ export const TECHNOLOGY_AGES = [
         effect: "Prepared positions hold against larger assaults.",
         defense: 0.2,
       },
+      {
+        id: "steam-engine",
+        name: "Steam engine",
+        effect: "Steam power expands workshops and national income.",
+        economy: 0.16,
+      },
+      {
+        id: "industrial-medicine",
+        name: "Industrial medicine",
+        effect: "Public sanitation helps cities sustain larger populations.",
+        economy: 0.08,
+      },
     ],
   },
   {
     name: "Modern",
     technologies: [
+      {
+        id: "radar",
+        name: "Radar networks",
+        effect: "Early warning systems strengthen defensive coordination.",
+        defense: 0.12,
+      },
+      {
+        id: "jet-aircraft",
+        name: "Jet aircraft",
+        effect: "Rapid air support increases the tempo of offensives.",
+        offense: 0.12,
+      },
+      {
+        id: "nuclear-energy",
+        name: "Nuclear energy",
+        effect: "New power stations fuel a more productive economy.",
+        economy: 0.18,
+      },
+      {
+        id: "mechanized-infantry",
+        name: "Mechanized infantry",
+        effect: "Armored transport improves battlefield mobility.",
+        siege: 0.1,
+      },
+      {
+        id: "antibiotics",
+        name: "Antibiotics",
+        effect: "Modern medicine keeps more workers and soldiers alive.",
+        economy: 0.1,
+      },
+      {
+        id: "missile-defense",
+        name: "Missile defense",
+        effect: "Layered defenses make fortified regions harder to overwhelm.",
+        defense: 0.12,
+      },
       {
         id: "combined-arms",
         name: "Combined-arms doctrine",
@@ -150,6 +223,47 @@ export const TECHNOLOGY_AGES = [
         name: "Secure field communications",
         effect: "Reliable communications improve defensive coordination.",
         defense: 0.18,
+      },
+    ],
+  },
+  {
+    name: "Information",
+    technologies: [
+      {
+        id: "satellites",
+        name: "Reconnaissance satellites",
+        effect: "Global surveillance improves military command.",
+        offense: 0.1,
+      },
+      {
+        id: "digital-networks",
+        name: "Digital networks",
+        effect: "Connected markets increase productivity and state revenue.",
+        economy: 0.16,
+      },
+      {
+        id: "precision-weapons",
+        name: "Precision weapons",
+        effect: "Accurate strikes make successful offensives more effective.",
+        siege: 0.12,
+      },
+      {
+        id: "drones",
+        name: "Uncrewed reconnaissance",
+        effect: "Persistent scouting helps commanders prepare defenses.",
+        defense: 0.1,
+      },
+      {
+        id: "automated-industry",
+        name: "Automated industry",
+        effect: "Automation raises output across the economy.",
+        economy: 0.16,
+      },
+      {
+        id: "integrated-command",
+        name: "Integrated command systems",
+        effect: "Real-time coordination improves force effectiveness.",
+        offense: 0.1,
       },
     ],
   },
@@ -230,23 +344,33 @@ function research(s, n, territory) {
   const age = TECHNOLOGY_AGES[n.tech.age];
   if (!age) return;
   n.tech.progress +=
-    0.22 + Math.min(0.75, Math.sqrt(territory) * 0.025) + n.efficiency / 1000;
-  if (n.tech.progress < 12) return;
+    0.13 + Math.min(0.72, Math.sqrt(territory) * 0.014) + n.efficiency / 2000;
+  const scholarChance = 0.012 + Math.min(0.02, Math.sqrt(territory) * 0.0006);
+  if (random(s) < scholarChance) {
+    n.tech.progress += 4 + random(s) * 3;
+    log(
+      s,
+      `A gifted scholar emerges in ${n.name}. Their new ideas accelerate research across the realm.`,
+      "technology",
+    );
+  }
+  if (n.tech.progress < TECH_PROGRESS_REQUIRED) return;
   const technology = age.technologies.find(
     (t) => !n.tech.unlocked.includes(t.id),
   );
   if (!technology) {
     if (n.tech.age < TECHNOLOGY_AGES.length - 1) {
+      n.tech.progress = 0;
       n.tech.age++;
       log(
         s,
         `${n.name} enters the ${technologyName(n)} age, opening a new path of scholarship and military reform.`,
         "technology",
       );
-    }
+    } else n.tech.progress = 0;
     return;
   }
-  n.tech.progress -= 12;
+  n.tech.progress -= TECH_PROGRESS_REQUIRED;
   n.tech.unlocked.push(technology.id);
   if (
     age.technologies.every((t) => n.tech.unlocked.includes(t.id)) &&
@@ -1144,9 +1268,13 @@ export function validate(input) {
       n.tech.age >= TECHNOLOGY_AGES.length ||
       !finite(n.tech.progress) ||
       n.tech.progress < 0 ||
-      n.tech.progress > 12 ||
+      n.tech.progress > TECH_PROGRESS_REQUIRED ||
       !Array.isArray(n.tech.unlocked) ||
-      n.tech.unlocked.length > TECHNOLOGY_AGES.length * 4 ||
+      n.tech.unlocked.length >
+        TECHNOLOGY_AGES.reduce(
+          (sum, age) => sum + age.technologies.length,
+          0,
+        ) ||
       !n.tech.unlocked.every((id) =>
         TECHNOLOGY_AGES.some((age) =>
           age.technologies.some((t) => t.id === id),
