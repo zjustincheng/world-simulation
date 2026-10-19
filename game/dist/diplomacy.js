@@ -61,6 +61,21 @@ export function settleRelation(s, a, b) {
 }
 export function diplomacyTick(s, borders, coasts, sizes) {
   s.relations ||= {};
+  // Defensive compacts should outlast the crisis that created them, not freeze
+  // the map forever. Let them lapse after a generation without a shared enemy.
+  for (const [a, b] of [...s.alliances]) {
+    const commonThreat = s.wars.some(
+      (left) =>
+        left.includes(a) &&
+        left.some(
+          (enemy) =>
+            enemy !== a &&
+            s.wars.some((right) => right.includes(b) && right.includes(enemy)),
+        ),
+    );
+    const pact = s.relations[keyOf(a, b)];
+    if (!commonThreat && pact && s.year - pact.since >= 20) ally(s, a, b);
+  }
   const candidates = new Set(borders.keys());
   // Historical claims can concern nearby islands, but never unreachable overseas rivals.
   for (const [key, r] of Object.entries(s.relations))
@@ -194,7 +209,7 @@ export function diplomacyTick(s, borders, coasts, sizes) {
     if (
       r.stage >= 2 &&
       r.tension >= 60 &&
-      (ratio < 0.7 || attacker.aggression < 0.8)
+      (ratio < 0.55 || attacker.aggression < 0.8)
     ) {
       log(
         s,
@@ -217,7 +232,7 @@ export function diplomacyTick(s, borders, coasts, sizes) {
       r.stage === 3 &&
       r.tension >= 100 &&
       s.year - r.since >= 12 &&
-      ratio >= 0.7
+      ratio >= 0.55
     ) {
       declareWar(s, attacker.id, target, {
         force: false,
