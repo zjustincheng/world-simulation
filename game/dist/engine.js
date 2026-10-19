@@ -14,7 +14,70 @@ export const W = 160,
   NEUTRAL = -2,
   MAX_NATIONS = 64;
 export const SEASONS = ["Spring", "Summer", "Autumn", "Winter"];
-export const TECH_PROGRESS_REQUIRED = 18;
+export const TECH_PROGRESS_REQUIRED = 48;
+export const GOVERNMENTS = [
+  {
+    id: "feudal-monarchy",
+    name: "Feudal Monarchy",
+    offense: 0.04,
+    defense: 0.06,
+    economy: 0,
+    stability: 0.06,
+  },
+  {
+    id: "elective-monarchy",
+    name: "Elective Monarchy",
+    offense: 0.04,
+    defense: 0.02,
+    economy: 0.05,
+    stability: 0.03,
+  },
+  {
+    id: "merchant-republic",
+    name: "Merchant Republic",
+    offense: 0,
+    defense: 0,
+    economy: 0.14,
+    stability: 0,
+  },
+  {
+    id: "tribal-confederation",
+    name: "Tribal Confederation",
+    offense: 0.08,
+    defense: 0.03,
+    economy: -0.04,
+    stability: -0.02,
+  },
+  {
+    id: "theocracy",
+    name: "Theocracy",
+    offense: 0,
+    defense: 0.04,
+    economy: 0,
+    stability: 0.1,
+  },
+  {
+    id: "council-state",
+    name: "Council State",
+    offense: 0.02,
+    defense: 0.02,
+    economy: 0.06,
+    stability: 0.02,
+  },
+];
+export const RELIGIONS = [
+  "Hearth Faith",
+  "Old Ways",
+  "Sun Creed",
+  "River Rite",
+  "Sky Covenant",
+  "Moon Temple",
+];
+export const governmentProfile = (nation) =>
+  GOVERNMENTS.find((government) => government.id === nation.government) ||
+  GOVERNMENTS[0];
+export const governmentName = (nation) => governmentProfile(nation).name;
+const governmentBonus = (nation, key) => governmentProfile(nation)[key] || 0;
 function climateRoll(s, cell, seasonIndex) {
   const y = Math.floor(cell / W),
     latitude = Math.abs(y / H - 0.5) * 2;
@@ -344,16 +407,10 @@ function research(s, n, territory) {
   const age = TECHNOLOGY_AGES[n.tech.age];
   if (!age) return;
   n.tech.progress +=
-    0.13 + Math.min(0.72, Math.sqrt(territory) * 0.014) + n.efficiency / 2000;
-  const scholarChance = 0.012 + Math.min(0.02, Math.sqrt(territory) * 0.0006);
-  if (random(s) < scholarChance) {
-    n.tech.progress += 4 + random(s) * 3;
-    log(
-      s,
-      `A gifted scholar emerges in ${n.name}. Their new ideas accelerate research across the realm.`,
-      "technology",
-    );
-  }
+    0.07 + Math.min(0.36, Math.sqrt(territory) * 0.007) + n.efficiency / 4000;
+  const scholarChance = 0.006 + Math.min(0.014, Math.sqrt(territory) * 0.0003);
+  const scholarBreakthrough = random(s) < scholarChance;
+  if (scholarBreakthrough) n.tech.progress += 6 + random(s) * 4;
   if (n.tech.progress < TECH_PROGRESS_REQUIRED) return;
   const technology = age.technologies.find(
     (t) => !n.tech.unlocked.includes(t.id),
@@ -364,7 +421,7 @@ function research(s, n, territory) {
       n.tech.age++;
       log(
         s,
-        `${n.name} enters the ${technologyName(n)} age, opening a new path of scholarship and military reform.`,
+        `${scholarBreakthrough ? `A gifted scholar in ${n.name} sparks a leap in learning. ` : ""}${n.name} enters the ${technologyName(n)} age, opening a new path of scholarship and military reform.`,
         "technology",
       );
     } else n.tech.progress = 0;
@@ -379,13 +436,13 @@ function research(s, n, territory) {
     n.tech.age++;
     log(
       s,
-      `${n.name} masters ${technology.name}; a wave of invention ushers in the ${technologyName(n)} age. ${technology.effect}`,
+      `${scholarBreakthrough ? `A gifted scholar in ${n.name} helps unlock a new idea. ` : ""}${n.name} masters ${technology.name}; a wave of invention ushers in the ${technologyName(n)} age. ${technology.effect}`,
       "technology",
     );
   } else {
     log(
       s,
-      `${n.name} develops ${technology.name}. ${technology.effect}`,
+      `${scholarBreakthrough ? `A gifted scholar in ${n.name} helps unlock a new idea. ` : ""}${n.name} develops ${technology.name}. ${technology.effect}`,
       "technology",
     );
   }
@@ -521,6 +578,14 @@ export function createWorld(
   return s;
 }
 function nationRecord(s, id, capital, name) {
+  const identityRoll = (salt) => {
+    let hash = Math.imul(
+      (s.rng ^ capital ^ Math.imul(id + 1, 0x9e3779b1) ^ salt) >>> 0,
+      2246822519,
+    );
+    hash ^= hash >>> 13;
+    return (hash >>> 0) / 4294967296;
+  };
   return {
     id,
     name: name || generateNationName(s, capital),
@@ -535,6 +600,19 @@ function nationRecord(s, id, capital, name) {
     kills: 0,
     born: s.year,
     dead: null,
+    government:
+      GOVERNMENTS[Math.floor(identityRoll(0x51ed) * GOVERNMENTS.length)].id,
+    religion: (() => {
+      const nearest = s.nations
+        .map((nation) => ({
+          nation,
+          distance: distance(capital, nation.capital),
+        }))
+        .sort((a, b) => a.distance - b.distance)[0];
+      return nearest && nearest.distance < 30 && identityRoll(0x72a9) < 0.72
+        ? nearest.nation.religion
+        : RELIGIONS[Math.floor(identityRoll(0xc0de) * RELIGIONS.length)];
+    })(),
     tech: { age: 0, progress: 0, unlocked: [] },
   };
 }
@@ -1047,7 +1125,10 @@ export function tick(s) {
     return (
       ((20 + Math.sqrt(before[id]) * 2) *
         (n.efficiency / 100) *
-        (1 + technologyBonus(n, "offense") + technologyBonus(n, "siege")) *
+        (1 +
+          technologyBonus(n, "offense") +
+          technologyBonus(n, "siege") +
+          governmentBonus(n, "offense")) *
         (0.35 + Math.min(n.wealth, 500) / 500) *
         (0.5 + n.stability / 100) *
         (1 + allySupport * 0.12)) /
@@ -1099,7 +1180,8 @@ export function tick(s) {
           power(defender) *
           (1 +
             height * 0.45 +
-            technologyBonus(s.nations[defender], "defense")) *
+            technologyBonus(s.nations[defender], "defense") +
+            governmentBonus(s.nations[defender], "defense")) *
           weatherDefense;
         const winner =
           random(s) < attackPower / (attackPower + defensivePower)
@@ -1168,7 +1250,10 @@ export function tick(s) {
     n.income = Number(
       (
         1 +
-        Math.sqrt(after[id]) * (0.22 + technologyBonus(n, "economy")) -
+        Math.sqrt(after[id]) *
+          (0.22 +
+            technologyBonus(n, "economy") +
+            governmentBonus(n, "economy")) -
         cost
       ).toFixed(1),
     );
@@ -1182,7 +1267,11 @@ export function tick(s) {
     );
     n.stability = Math.max(
       5,
-      Math.min(100, n.stability + (fronts[id] ? -0.25 : 0.6)),
+      Math.min(
+        100,
+        n.stability +
+          (fronts[id] ? -0.25 : 0.6 + governmentBonus(n, "stability")),
+      ),
     );
     n.population = after[id] * 300;
     n.peak = Math.max(n.peak, after[id]);
@@ -1244,10 +1333,14 @@ export function validate(input) {
   }
   s.nations.forEach((n, i) => {
     n.tech ??= { age: 0, progress: 0, unlocked: [] };
+    n.government ??= GOVERNMENTS[i % GOVERNMENTS.length].id;
+    n.religion ??= RELIGIONS[i % RELIGIONS.length];
     if (
       n.id !== i ||
       typeof n.name !== "string" ||
       n.name.length > 60 ||
+      !GOVERNMENTS.some((government) => government.id === n.government) ||
+      !RELIGIONS.includes(n.religion) ||
       !/^#[0-9a-f]{6}$/i.test(n.color) ||
       !integer(n.capital) ||
       n.capital < 0 ||

@@ -186,7 +186,13 @@ export function diplomacyTick(s, borders, coasts, sizes) {
       r.tension = Math.max(0, r.tension - 5);
       continue;
     }
-    r.tension = Math.min(100, r.tension + 4 * s.settings.aggression);
+    // Shared religious institutions can ease talks around an existing dispute;
+    // faith never creates a war cause on its own.
+    const sharedFaithPace = A.religion === B.religion ? 0.82 : 1;
+    r.tension = Math.min(
+      100,
+      r.tension + 4 * s.settings.aggression * sharedFaithPace,
+    );
     if (r.stage === 0 && r.tension >= 24) {
       r.stage = 1;
       log(
