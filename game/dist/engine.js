@@ -13,6 +13,129 @@ export const W = 160,
   WATER = -1,
   NEUTRAL = -2,
   MAX_NATIONS = 64;
+export const TECHNOLOGY_AGES = [
+  {
+    name: "Medieval",
+    technologies: [
+      {
+        id: "three-field",
+        name: "Three-field rotation",
+        effect: "Food surpluses support faster growth and income.",
+        economy: 0.25,
+      },
+      {
+        id: "stirrups",
+        name: "Warhorse breeding",
+        effect: "Mounted forces gain an edge in open battles.",
+        offense: 0.1,
+      },
+      {
+        id: "stone-keeps",
+        name: "Stone keeps",
+        effect: "Fortified high ground is harder to take.",
+        defense: 0.14,
+      },
+      {
+        id: "counterweight",
+        name: "Counterweight trebuchets",
+        effect: "Siege trains take more ground after a victory.",
+        siege: 0.12,
+      },
+    ],
+  },
+  {
+    name: "Renaissance",
+    technologies: [
+      {
+        id: "field-drill",
+        name: "Field drill",
+        effect: "Regular training improves army strength.",
+        offense: 0.12,
+      },
+      {
+        id: "surveyors",
+        name: "Royal surveyors",
+        effect: "Better surveys improve trade and taxation.",
+        economy: 0.22,
+      },
+      {
+        id: "trace-italienne",
+        name: "Bastion fortifications",
+        effect: "New defenses make rough terrain still costlier to cross.",
+        defense: 0.18,
+      },
+      {
+        id: "matchlocks",
+        name: "Matchlock companies",
+        effect: "Early firearms strengthen disciplined armies.",
+        offense: 0.14,
+      },
+    ],
+  },
+  {
+    name: "Industrial",
+    technologies: [
+      {
+        id: "rail",
+        name: "Military railways",
+        effect: "Supply lines sustain larger campaigns.",
+        offense: 0.13,
+      },
+      {
+        id: "telegraph",
+        name: "Telegraph network",
+        effect: "Faster coordination improves battlefield command.",
+        offense: 0.1,
+      },
+      {
+        id: "mass-production",
+        name: "Mass production",
+        effect: "Mechanized workshops increase state revenue.",
+        economy: 0.3,
+      },
+      {
+        id: "modern-forts",
+        name: "Modern fortifications",
+        effect: "Prepared positions hold against larger assaults.",
+        defense: 0.2,
+      },
+    ],
+  },
+  {
+    name: "Modern",
+    technologies: [
+      {
+        id: "combined-arms",
+        name: "Combined-arms doctrine",
+        effect: "Coordinated forces gain a decisive combat advantage.",
+        offense: 0.16,
+      },
+      {
+        id: "air-recon",
+        name: "Aerial reconnaissance",
+        effect: "Reconnaissance improves the tempo of attacks.",
+        siege: 0.12,
+      },
+      {
+        id: "logistics",
+        name: "Motorized logistics",
+        effect: "Modern supply networks support prosperous armies.",
+        economy: 0.25,
+      },
+      {
+        id: "communications",
+        name: "Secure field communications",
+        effect: "Reliable communications improve defensive coordination.",
+        defense: 0.18,
+      },
+    ],
+  },
+];
+export const technologyName = (n) => TECHNOLOGY_AGES[n.tech?.age || 0].name;
+export const technologyBonus = (n, key) =>
+  TECHNOLOGY_AGES.flatMap((age) => age.technologies)
+    .filter((tech) => n.tech?.unlocked?.includes(tech.id))
+    .reduce((sum, tech) => sum + (tech[key] || 0), 0);
 export const colors = [
   "#ed695e",
   "#58bda0",
@@ -78,6 +201,47 @@ export const related = (list, a, b) =>
 export function log(s, text, type = "world") {
   s.events.unshift({ year: s.year, text, type });
   s.events.length = Math.min(s.events.length, 150);
+}
+function research(s, n, territory) {
+  n.tech ||= { age: 0, progress: 0, unlocked: [] };
+  const age = TECHNOLOGY_AGES[n.tech.age];
+  if (!age) return;
+  n.tech.progress +=
+    0.22 + Math.min(0.75, Math.sqrt(territory) * 0.025) + n.efficiency / 1000;
+  if (n.tech.progress < 12) return;
+  const technology = age.technologies.find(
+    (t) => !n.tech.unlocked.includes(t.id),
+  );
+  if (!technology) {
+    if (n.tech.age < TECHNOLOGY_AGES.length - 1) {
+      n.tech.age++;
+      log(
+        s,
+        `${n.name} enters the ${technologyName(n)} age, opening a new path of scholarship and military reform.`,
+        "technology",
+      );
+    }
+    return;
+  }
+  n.tech.progress -= 12;
+  n.tech.unlocked.push(technology.id);
+  if (
+    age.technologies.every((t) => n.tech.unlocked.includes(t.id)) &&
+    n.tech.age < TECHNOLOGY_AGES.length - 1
+  ) {
+    n.tech.age++;
+    log(
+      s,
+      `${n.name} masters ${technology.name}; a wave of invention ushers in the ${technologyName(n)} age. ${technology.effect}`,
+      "technology",
+    );
+  } else {
+    log(
+      s,
+      `${n.name} develops ${technology.name}. ${technology.effect}`,
+      "technology",
+    );
+  }
 }
 export function stats(s) {
   const counts = Array(s.nations.length).fill(0);
@@ -223,6 +387,7 @@ function nationRecord(s, id, capital, name) {
     kills: 0,
     born: s.year,
     dead: null,
+    tech: { age: 0, progress: 0, unlocked: [] },
   };
 }
 export function spawnNation(s, cell, { quiet = false, radius = 3, name } = {}) {
@@ -624,17 +789,19 @@ function frontiers(s) {
   }
   return { expansion, borders, coasts };
 }
-function capture(s, cell, winner, loser, budget) {
+function capture(s, cell, winner, loser, budget, attacker = winner) {
   const queue = [cell],
     seen = new Set(queue);
   let head = 0,
-    taken = 0;
+    taken = 0,
+    capturedCapital = false;
   while (head < queue.length && taken < budget) {
     const i = queue[head++];
     if (s.owner[i] !== loser) continue;
     s.owner[i] = winner;
     taken++;
     if (i === s.nations[loser].capital) {
+      capturedCapital = true;
       s.nations[loser].stability = Math.max(5, s.nations[loser].stability - 15);
       s.nations[winner].wealth = Math.min(99999, s.nations[winner].wealth + 50);
       log(
@@ -649,8 +816,21 @@ function capture(s, cell, winner, loser, budget) {
         queue.push(j);
       }
   }
-  if (taken)
-    s.flashes.push({ cell, color: s.nations[winner].color, year: s.year });
+  if (taken) {
+    const terrain = s.terrain[cell];
+    s.flashes.push({
+      cell,
+      color: s.nations[winner].color,
+      year: s.year,
+      winner,
+      loser,
+      attacker,
+      tiles: taken,
+      terrain,
+      capital: capturedCapital,
+      key: capturedCapital || taken >= 10 || terrain > 0.25,
+    });
+  }
   if (taken) recordLoss(s, winner, loser, taken);
   const key = pair(winner, loser).join(",");
   s.warStats ||= {};
@@ -693,6 +873,7 @@ export function tick(s) {
     return (
       ((20 + Math.sqrt(before[id]) * 2) *
         (n.efficiency / 100) *
+        (1 + technologyBonus(n, "offense") + technologyBonus(n, "siege")) *
         (0.35 + Math.min(n.wealth, 500) / 500) *
         (0.5 + n.stability / 100) *
         (1 + allySupport * 0.12)) /
@@ -711,17 +892,40 @@ export function tick(s) {
         // Earlier battles may have changed this edge; never attack through a third nation.
         const owners = edge.map((i) => s.owner[i]);
         if (!owners.includes(a) || !owners.includes(b)) continue;
-        const winner = random(s) < pa / (pa + pb) ? a : b,
-          loser = winner === a ? b : a;
-        const target = edge.find((i) => s.owner[i] === loser);
+        const attacker = random(s) < pa / (pa + pb) ? a : b,
+          defender = attacker === a ? b : a;
+        const target = edge.find((i) => s.owner[i] === defender);
         if (target === undefined) continue;
-        const resistance = s.terrain[target] > 0.25 ? 0.55 : 1;
+        const height = Math.max(0, s.terrain[target]);
+        const resistance = Math.max(
+          0.35,
+          1 -
+            Math.max(0, height - 0.18) *
+              (1.35 - technologyBonus(s.nations[attacker], "siege")),
+        );
+        const attackPower = power(attacker);
+        const defensivePower =
+          power(defender) *
+          (1 + height * 0.45 + technologyBonus(s.nations[defender], "defense"));
+        const winner =
+          random(s) < attackPower / (attackPower + defensivePower)
+            ? attacker
+            : defender;
+        const loser = winner === a ? b : a;
         capture(
           s,
           target,
           winner,
           loser,
-          Math.max(1, Math.floor((7 + random(s) * 20) * resistance)),
+          Math.max(
+            1,
+            Math.floor(
+              (7 + random(s) * 20) *
+                resistance *
+                (1 + technologyBonus(s.nations[winner], "siege")),
+            ),
+          ),
+          attacker,
         );
       }
     } else if (s.year % 4 === 0 && coasts[a].length && coasts[b].length) {
@@ -748,7 +952,13 @@ export function tick(s) {
       continue;
     }
     const cost = fronts[id] * 3.5;
-    n.income = Number((1 + Math.sqrt(after[id]) * 0.22 - cost).toFixed(1));
+    n.income = Number(
+      (
+        1 +
+        Math.sqrt(after[id]) * (0.22 + technologyBonus(n, "economy")) -
+        cost
+      ).toFixed(1),
+    );
     n.wealth = Math.max(0, Math.min(99999, n.wealth + n.income));
     n.efficiency = Math.max(
       15,
@@ -763,6 +973,7 @@ export function tick(s) {
     );
     n.population = after[id] * 300;
     n.peak = Math.max(n.peak, after[id]);
+    research(s, n, after[id]);
     if (
       s.settings.revolts &&
       s.nations.length < MAX_NATIONS &&
@@ -819,6 +1030,7 @@ export function validate(input) {
     s.version = 2;
   }
   s.nations.forEach((n, i) => {
+    n.tech ??= { age: 0, progress: 0, unlocked: [] };
     if (
       n.id !== i ||
       typeof n.name !== "string" ||
@@ -837,6 +1049,21 @@ export function validate(input) {
         "kills",
         "born",
       ].every((k) => finite(n[k]) && n[k] >= 0) ||
+      !n.tech ||
+      !integer(n.tech.age) ||
+      n.tech.age < 0 ||
+      n.tech.age >= TECHNOLOGY_AGES.length ||
+      !finite(n.tech.progress) ||
+      n.tech.progress < 0 ||
+      n.tech.progress > 12 ||
+      !Array.isArray(n.tech.unlocked) ||
+      n.tech.unlocked.length > TECHNOLOGY_AGES.length * 4 ||
+      !n.tech.unlocked.every((id) =>
+        TECHNOLOGY_AGES.some((age) =>
+          age.technologies.some((t) => t.id === id),
+        ),
+      ) ||
+      new Set(n.tech.unlocked).size !== n.tech.unlocked.length ||
       !(n.dead === null || (integer(n.dead) && n.dead >= 1))
     )
       fail();

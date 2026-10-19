@@ -2,6 +2,8 @@
 
 A playable browser world-war sandbox inspired by Ages of Conflict. Spawn nations, redraw the world, and advance from one major historical event to the next as economies, alliances, revolutions, and wars change borders.
 
+Every realm begins in the Medieval age and researches its way toward later eras. Discoveries improve its economy and armies; hills and mountains strengthen defenders and slow conquest. Major battles, including capital battles, are marked on the map as a war's year-by-year territorial timeline plays.
+
 [Play the private hosted game](https://world-simulation-atlas.gentlelarch6.chatgpt.site)
 
 ## Run locally

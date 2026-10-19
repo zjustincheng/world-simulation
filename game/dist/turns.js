@@ -326,13 +326,16 @@ export function advanceToMajorEvent(s) {
       const annual = s.events.filter((e) => e.year === s.year);
       const important = annual.filter(
         (e) =>
-          ["war", "fall", "birth", "crisis", "battle"].includes(e.type) ||
+          ["technology", "war", "fall", "birth", "crisis", "battle"].includes(
+            e.type,
+          ) ||
           (e.type === "peace" &&
             /settlement|truce|compact|alliance|accord/i.test(e.text)),
       );
       developments.push(...important);
       frames.push({
         year: s.year,
+        battles: structuredClone(s.flashes || []),
         changes: s.owner.flatMap((to, cell) =>
           to === previous[cell] ? [] : [{ cell, from: previous[cell], to }],
         ),
@@ -397,7 +400,15 @@ export function advanceToMajorEvent(s) {
   }));
   const claimed = changes.filter((c) => c.from === NEUTRAL && c.to >= 0).length;
   const transferred = changes.filter((c) => c.from >= 0 && c.to >= 0).length;
-  const priority = ["fall", "birth", "peace", "war", "crisis", "battle"];
+  const priority = [
+    "fall",
+    "birth",
+    "peace",
+    "war",
+    "crisis",
+    "battle",
+    "technology",
+  ];
   developments.sort(
     (a, b) => priority.indexOf(a.type) - priority.indexOf(b.type),
   );
@@ -453,6 +464,28 @@ export function advanceToMajorEvent(s) {
   const diplomacy = developments.filter(
     (e) => ["crisis", "peace"].includes(e.type) && !allianceEvents.includes(e),
   );
+  const technologies = developments
+    .filter((e) => e.type === "technology")
+    .map((e) => ({ title: e.text.split(".")[0], text: e.text, year: e.year }));
+  const battles = frames
+    .flatMap((frame) =>
+      frame.battles.map((battle) => ({ ...battle, year: frame.year })),
+    )
+    .filter((battle) => battle.key)
+    .sort(
+      (a, b) =>
+        Number(b.capital) - Number(a.capital) ||
+        b.tiles - a.tiles ||
+        b.terrain - a.terrain,
+    )
+    .slice(0, 12)
+    .map((battle) => ({
+      ...battle,
+      title: battle.capital
+        ? `Capital battle · Year ${battle.year}`
+        : `Key battle · Year ${battle.year}`,
+      text: `${s.nations[battle.winner]?.name || "A rival army"} captured ${battle.tiles} tiles from ${s.nations[battle.loser]?.name || "the defender"} on ${battle.terrain > 0.45 ? "mountainous" : battle.terrain > 0.25 ? "highland" : "open"} ground${battle.capital ? ", including the capital" : ""}.`,
+    }));
   const roundup = {
     wars,
     alliances,
@@ -460,6 +493,8 @@ export function advanceToMajorEvent(s) {
     politics,
     crises,
     diplomacy,
+    technologies,
+    battles,
   };
   const title = !s.settings.ai
     ? "History is paused"
@@ -469,11 +504,13 @@ export function advanceToMajorEvent(s) {
         ? "A campaign changes the balance"
         : politics.length
           ? "New states and shifting borders"
-          : milestone === "expansion"
-            ? "An era of settlement"
-            : developments.length
-              ? "A changing diplomatic order"
-              : "An era of relative calm";
+          : technologies.length
+            ? "An age of invention"
+            : milestone === "expansion"
+              ? "An era of settlement"
+              : developments.length
+                ? "A changing diplomatic order"
+                : "An era of relative calm";
   const elapsed = s.year - startYear;
   const time = elapsed
     ? `${elapsed === 1 ? "One year has" : `${elapsed} years have`} passed since the last event.`
@@ -523,5 +560,6 @@ export function advanceToMajorEvent(s) {
     headline: title,
     milestone,
     roundup,
+    battles,
   };
 }

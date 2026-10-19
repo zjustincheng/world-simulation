@@ -17,6 +17,8 @@ import {
   related,
   log,
   validate,
+  technologyName,
+  TECHNOLOGY_AGES,
 } from "./engine.js";
 import { REAL_MAPS } from "./real-maps.js";
 import { populateWorld } from "./setup.js";
@@ -210,6 +212,33 @@ function draw(now = performance.now()) {
       ctx.strokeRect(x + 0.1, y + 0.1, 0.8, 0.8);
     }
   }
+  const playbackYear = borderAnimation?.steps[borderAnimation.cursor - 1]?.year;
+  const battleMarks = (borderAnimation?.battles || lastTurn?.battles || [])
+    .filter(
+      (battle) =>
+        !borderAnimation ||
+        (playbackYear !== undefined && battle.year <= playbackYear),
+    )
+    .filter((battle) => battle.key)
+    .slice(-12);
+  for (const battle of battleMarks) {
+    const x = (battle.cell % W) + 0.5,
+      y = Math.floor(battle.cell / W) + 0.5;
+    ctx.save();
+    ctx.strokeStyle = "#ffe38a";
+    ctx.fillStyle = "#342b1bdc";
+    ctx.lineWidth = 0.22;
+    ctx.beginPath();
+    ctx.arc(x, y, battle.capital ? 1.15 : 0.82, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#fff3bf";
+    ctx.font = `bold ${battle.capital ? 1.2 : 0.95}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(battle.capital ? "★" : "✦", x, y);
+    ctx.restore();
+  }
   if (borderAnimation) {
     const recent = borderAnimation.steps.slice(
       Math.max(0, borderAnimation.cursor - 45),
@@ -396,7 +425,13 @@ function renderDetail(force = false) {
     .filter((p) => p.includes(selected))
     .map((p) => world.nations[p[0] === selected ? p[1] : p[0]].name);
   detail.dataset.nation = selected;
-  detail.innerHTML = `<div class="detail-top">NATION INSPECTOR <button id="close-detail" aria-label="Close nation inspector">×</button></div><div class="detail-title"><span class="flag" style="background:${n.color}"></span><h2>${esc(n.name)}</h2></div><div class="detail-status">${alive ? (enemies.length ? "⚔ AT WAR · " + enemies.length + " FRONT" + (enemies.length > 1 ? "S" : "") : "● AT PEACE") : "FALLEN NATION"} · FOUNDED YEAR ${n.born}<br>CAPITAL REGION · ${esc(capitalRegion(world, n.capital).label)}</div><div class="metrics"><div><label>Territory</label><strong>${compact(counts[selected])} <small>tiles</small></strong></div><div><label>Gold <small>(${(n.income || 0) >= 0 ? "+" : ""}${n.income || 0}/yr)</small></label><strong>${compact(Math.floor(n.wealth))}</strong></div><div><label>Combat efficiency</label><strong>${Math.round(n.efficiency)}<small>%</small></strong><div class="stat-bar"><div style="width:${Math.min(100, n.efficiency / 1.5)}%"></div></div></div><div><label>Stability</label><strong>${Math.round(n.stability)}<small>%</small></strong><div class="stat-bar"><div style="width:${n.stability}%;background:${n.stability < 40 ? "#ed827e" : "#8ed8b1"}"></div></div></div></div><div class="relations"><b>Allies:</b> ${esc(allies.join(", ") || "None")}<br><b>Enemies:</b> ${esc(enemies.join(", ") || "None")}</div><div class="god-heading">GOD MODE <span>${n.kills} CONQUESTS</span></div><div class="actions"><button data-action="gold" ${!alive ? "disabled" : ""}>＋ 500 gold</button><button data-action="peace" ${!enemies.length ? "disabled" : ""}>☮ Make peace</button><button data-action="rebel" ${counts[selected] < 30 ? "disabled" : ""}>⚡ Revolt</button><button data-action="follow" ${!alive ? "disabled" : ""}>⌖ Find capital</button></div><select id="rival" class="diplomacy-select" aria-label="Target nation">${world.nations
+  const tech = n.tech || { age: 0, progress: 0, unlocked: [] },
+    currentAge = TECHNOLOGY_AGES[tech.age] || TECHNOLOGY_AGES[0],
+    nextTech = currentAge.technologies.find(
+      (t) => !tech.unlocked.includes(t.id),
+    );
+  const techMarkup = `<div class="tech-card"><div class="tech-heading">TECHNOLOGY · ${esc(technologyName(n))}</div><div class="tech-progress"><div style="width:${Math.min(100, (tech.progress / 12) * 100)}%"></div></div><p>${tech.unlocked.length} discoveries · ${nextTech ? `Researching ${esc(nextTech.name)}` : tech.age < TECHNOLOGY_AGES.length - 1 ? "A new age of scholarship is within reach" : "All known technologies mastered"}</p><small>${currentAge.technologies.map((t) => `${tech.unlocked.includes(t.id) ? "✓" : "·"} ${esc(t.name)}`).join(" · ")}</small></div>`;
+  detail.innerHTML = `<div class="detail-top">NATION INSPECTOR <button id="close-detail" aria-label="Close nation inspector">×</button></div><div class="detail-title"><span class="flag" style="background:${n.color}"></span><h2>${esc(n.name)}</h2></div><div class="detail-status">${alive ? (enemies.length ? "⚔ AT WAR · " + enemies.length + " FRONT" + (enemies.length > 1 ? "S" : "") : "● AT PEACE") : "FALLEN NATION"} · FOUNDED YEAR ${n.born}<br>CAPITAL REGION · ${esc(capitalRegion(world, n.capital).label)}</div>${techMarkup}<div class="metrics"><div><label>Territory</label><strong>${compact(counts[selected])} <small>tiles</small></strong></div><div><label>Gold <small>(${(n.income || 0) >= 0 ? "+" : ""}${n.income || 0}/yr)</small></label><strong>${compact(Math.floor(n.wealth))}</strong></div><div><label>Combat efficiency</label><strong>${Math.round(n.efficiency)}<small>%</small></strong><div class="stat-bar"><div style="width:${Math.min(100, n.efficiency / 1.5)}%"></div></div></div><div><label>Stability</label><strong>${Math.round(n.stability)}<small>%</small></strong><div class="stat-bar"><div style="width:${n.stability}%;background:${n.stability < 40 ? "#ed827e" : "#8ed8b1"}"></div></div></div></div><div class="relations"><b>Allies:</b> ${esc(allies.join(", ") || "None")}<br><b>Enemies:</b> ${esc(enemies.join(", ") || "None")}</div><div class="god-heading">GOD MODE <span>${n.kills} CONQUESTS</span></div><div class="actions"><button data-action="gold" ${!alive ? "disabled" : ""}>＋ 500 gold</button><button data-action="peace" ${!enemies.length ? "disabled" : ""}>☮ Make peace</button><button data-action="rebel" ${counts[selected] < 30 ? "disabled" : ""}>⚡ Revolt</button><button data-action="follow" ${!alive ? "disabled" : ""}>⌖ Find capital</button></div><select id="rival" class="diplomacy-select" aria-label="Target nation">${world.nations
     .filter((m) => m.id !== selected && counts[m.id])
     .map((m) => `<option value="${m.id}">${esc(m.name)}</option>`)
     .join(
@@ -647,7 +682,7 @@ function renderWorldRoundup(report) {
           `<article class="roundup-item"><strong>${esc(item.title || `Year ${item.year}`)}</strong><p>${esc(item.text)}</p></article>`,
       )
       .join("");
-  return `<div class="world-roundup"><h3>AROUND THE WORLD</h3><details open><summary>Wars & settlements · ${r.wars.length}</summary>${cards(r.wars) || "<p>No wars during this period.</p>"}</details><details open><summary>Alliances & unions · ${r.alliances.length} active alliances</summary>${cards(r.alliances) || "<p>No active alliances.</p>"}${r.allianceEvents.length ? `<h4>Diplomatic changes</h4>${cards(r.allianceEvents)}` : "<p>No new unions or alliance changes were recorded.</p>"}</details><details ${r.politics.length ? "open" : ""}><summary>Countries & political changes · ${r.politics.length}</summary>${cards(r.politics) || "<p>No changes to statehood.</p>"}</details><details><summary>Negotiations & peace agreements · ${r.diplomacy.length}</summary>${cards(r.diplomacy) || "<p>No diplomatic developments recorded.</p>"}</details><details><summary>Other diplomatic crises · ${r.crises.length}</summary>${cards(r.crises) || "<p>No active crises.</p>"}</details></div>`;
+  return `<div class="world-roundup"><h3>AROUND THE WORLD</h3><details open><summary>Wars & settlements · ${r.wars.length}</summary>${cards(r.wars) || "<p>No wars during this period.</p>"}</details><details ${r.battles.length ? "open" : ""}><summary>Key battles · ${r.battles.length}</summary>${cards(r.battles) || "<p>No decisive battles were recorded this chapter.</p>"}<p class="battle-legend">★ Capital battle · ✦ Major engagement. Markers remain on the map until the next chapter.</p></details><details ${r.technologies.length ? "open" : ""}><summary>Technology & scholarship · ${r.technologies.length} discoveries</summary>${cards(r.technologies) || "<p>The kingdoms remain within the medieval age.</p>"}</details><details open><summary>Alliances & unions · ${r.alliances.length} active alliances</summary>${cards(r.alliances) || "<p>No active alliances.</p>"}${r.allianceEvents.length ? `<h4>Diplomatic changes</h4>${cards(r.allianceEvents)}` : "<p>No new unions or alliance changes were recorded.</p>"}</details><details ${r.politics.length ? "open" : ""}><summary>Countries & political changes · ${r.politics.length}</summary>${cards(r.politics) || "<p>No changes to statehood.</p>"}</details><details><summary>Negotiations & peace agreements · ${r.diplomacy.length}</summary>${cards(r.diplomacy) || "<p>No diplomatic developments recorded.</p>"}</details><details><summary>Other diplomatic crises · ${r.crises.length}</summary>${cards(r.crises) || "<p>No active crises.</p>"}</details></div>`;
 }
 function showTurnEvent() {
   const { report, eventIndex } = pendingTurn;
@@ -729,7 +764,9 @@ function startBorderAnimation() {
     ? pendingTurn.events[pendingTurn.eventIndex]
     : null;
   const steps = event
-    ? event.changes.map((change) => ({ ...change, year: event.year }))
+    ? report.frames.flatMap((frame) =>
+        frame.changes.map((change) => ({ ...change, year: frame.year })),
+      )
     : pendingTurn.remainingSteps ||
       report.frames.flatMap((frame) =>
         frame.changes.map((change) => ({ ...change, year: frame.year })),
@@ -737,6 +774,7 @@ function startBorderAnimation() {
   $("#pause-animation").textContent = "Pause";
   borderAnimation = {
     steps,
+    battles: report.battles || [],
     pausedAt: null,
     cursor: 0,
     start: performance.now(),
