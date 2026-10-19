@@ -1747,3 +1747,27 @@ dialog label > select {
     min-width: 65px;
   }
 }
+.war-cause,
+#crises-list p,
+#settlements-list p {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+#crises-list .war-card {
+  border-left: 2px solid #d9b77b;
+}
+#crises-list h4 {
+  margin: 12px 0;
+  line-height: 1.5;
+}
+#settlements-list .truce-card {
+  display: block;
+}
+#settlements-list small {
+  display: block;
+  margin-top: 8px;
+}
+.turn-event.crisis {
+  border-left-color: #d9b77b;
+}

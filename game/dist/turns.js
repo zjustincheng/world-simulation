@@ -167,8 +167,18 @@ function domesticEvent(s, guaranteed = false) {
       9,
     ],
   ];
+  const atWar = s.wars.some((p) => p[0] === n.id || p[1] === n.id);
+  const eligible = stories.filter(
+    ([type, title, , gold]) =>
+      !(type === "peace" && atWar) &&
+      !(gold < 0 && type !== "hardship" && n.wealth < -gold) &&
+      !s.events
+        .slice(0, 30)
+        .some((e) => e.text.startsWith(`${title}.`) && e.text.includes(n.name)),
+  );
+  if (!eligible.length) return;
   const [type, title, story, gold, stability, efficiency] =
-    stories[Math.floor(random(s) * stories.length)];
+    eligible[Math.floor(random(s) * eligible.length)];
   const before = [n.wealth, n.stability, n.efficiency];
   n.wealth = Math.max(0, Math.min(99999, n.wealth + gold));
   n.stability = Math.max(5, Math.min(100, n.stability + stability));
@@ -226,14 +236,17 @@ export function advanceTurn(s, years = 5) {
     for (const [key, changes] of campaigns) {
       const [from, to] = key.split(",").map(Number),
         tiles = changes.length;
+      const secession = to >= 0 && s.nations[to].born === s.year && from >= 0;
       log(
         s,
-        to < 0
-          ? `An abandoned frontier. ${s.nations[from].name} loses control of ${tiles} tiles. These lands are now unclaimed.`
-          : from >= 0
-            ? `The frontier shifts. ${s.nations[to].name} takes ${tiles} tiles from ${s.nations[from].name} during this year's fighting. Watch this stretch of the frontier change hands.`
-            : `A new frontier opens. Settlers from ${s.nations[to].name} establish control over ${tiles} unclaimed tiles this year. Watch their new communities join the country.`,
-        from >= 0 ? "battle" : "expansion",
+        secession
+          ? `Secession redraws the frontier. ${s.nations[to].name} establishes a breakaway administration across ${tiles} tiles formerly governed by ${s.nations[from].name}. The transfer marks a declaration of independence, whose survival is not yet assured.`
+          : to < 0
+            ? `An abandoned frontier. ${s.nations[from].name} loses control of ${tiles} tiles. These lands are now unclaimed.`
+            : from >= 0
+              ? `The frontier shifts. ${s.nations[to].name} takes ${tiles} tiles from ${s.nations[from].name} during this year's fighting. Local administration passes to the occupying government, while the former rulers lose revenue and recruiting ground.`
+              : `A new frontier opens. Settlers from ${s.nations[to].name} establish control over ${tiles} unclaimed tiles this year. The new settlements extend the capital’s tax base and bring its authority closer to neighboring states.`,
+        secession ? "birth" : from >= 0 ? "battle" : "expansion",
       );
       annualEvents.push({ ...s.events[0], changes });
     }
@@ -266,6 +279,7 @@ export function advanceTurn(s, years = 5) {
       "birth",
       "war",
       "battle",
+      "crisis",
       "hardship",
       "prosperity",
       "reform",

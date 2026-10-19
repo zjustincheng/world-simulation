@@ -242,12 +242,19 @@
         </section>
         <section id="panel-wars" class="panel" hidden>
           <div class="panel-heading">
-            <h2>War room</h2>
-            <p>Follow territorial gains and negotiate peace.</p>
+            <h2>Diplomacy & wars</h2>
+            <p>
+              Follow the disputes, war aims, and settlements shaping this world.
+            </p>
           </div>
+          <h3>DIPLOMATIC CRISES</h3>
+          <div id="crises-list"></div>
+          <h3>ACTIVE WARS</h3>
           <div id="wars-list"></div>
           <h3>ACTIVE TRUCES</h3>
           <div id="truces-list"></div>
+          <h3>RECENT SETTLEMENTS</h3>
+          <div id="settlements-list"></div>
           <p class="setting-note">
             Peace grants 15 years of protection from AI war declarations. God
             mode can break a truce.
@@ -274,7 +281,7 @@
             >Revolutions
             <input data-setting="revolts" type="checkbox" checked /></label
           ><label class="range-label"
-            >War frequency <output id="aggression-value">Normal</output
+            >Diplomatic pressure <output id="aggression-value">Normal</output
             ><input
               id="aggression"
               type="range"

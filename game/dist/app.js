@@ -406,14 +406,46 @@ function renderDetail(force = false) {
     $("#rival").value = rival;
 }
 function renderWars() {
+  const crises = Object.values(world.relations || {})
+    .filter(
+      (r) =>
+        counts[r.a] &&
+        counts[r.b] &&
+        r.tension >= 24 &&
+        r.reason &&
+        !related(world.wars, r.a, r.b),
+    )
+    .sort((a, b) => b.tension - a.tension);
+  $("#crises-list").innerHTML =
+    crises
+      .map(
+        (r) =>
+          `<article class="war-card"><small>${r.stage >= 3 ? "MOBILIZATION" : r.stage >= 2 ? "NEGOTIATIONS" : "DISPUTE"} · SINCE YEAR ${r.since}</small><h4>${esc(world.nations[r.a].name)} & ${esc(world.nations[r.b].name)}</h4><p>${esc(r.reason)}.</p><span>Tension ${Math.round(r.tension)}/100</span></article>`,
+      )
+      .join("") ||
+    '<p class="setting-note">No active diplomatic crises. Shared borders alone do not mean war.</p>';
+  $("#settlements-list").innerHTML =
+    (world.warHistory || [])
+      .filter((r) => r.ended !== null)
+      .slice(-8)
+      .reverse()
+      .map(
+        (r) =>
+          `<article class="truce-card"><strong>${esc(world.nations[r.a].name)} / ${esc(world.nations[r.b].name)}</strong><small>YEARS ${r.started}–${r.ended}</small><p>${esc(r.reason)}.</p><p>${esc(r.outcome)}</p></article>`,
+      )
+      .join("") ||
+    '<p class="setting-note">Settlements will record how wars ended and what changed.</p>';
   $("#wars-list").innerHTML =
     world.wars
       .map(([a, b, started]) => {
         const first = world.nations[a],
           second = world.nations[b];
         const [ga, gb] = world.warStats?.[`${a},${b}`] || [0, 0];
+        const history = (world.warHistory || []).findLast(
+          (r) => r.a === a && r.b === b && r.ended === null,
+        );
         const share = ga + gb ? (ga / (ga + gb)) * 100 : 50;
-        return `<article class="war-card"><small>WAR · ${world.year - started} YEARS</small><div class="war-sides"><button data-focus-nation="${a}" style="color:${first.color}">${esc(first.name)}</button><span>⚔</span><button data-focus-nation="${b}" style="color:${second.color}">${esc(second.name)}</button></div><div class="war-balance" style="background:${second.color}"><div style="background:${first.color};width:${share}%"></div></div><div class="war-gains"><span>${ga} captured</span><span>${gb} captured</span></div><button class="full" data-war-peace="${a},${b}">Negotiate peace</button></article>`;
+        return `<article class="war-card"><small>WAR · ${world.year - started} YEARS</small><div class="war-sides"><button data-focus-nation="${a}" style="color:${first.color}">${esc(first.name)}</button><span>⚔</span><button data-focus-nation="${b}" style="color:${second.color}">${esc(second.name)}</button></div><p class="war-cause"><b>Cause:</b> ${esc(history?.reason || "The cause of this older conflict was not recorded.")}</p><div class="war-balance" style="background:${second.color}"><div style="background:${first.color};width:${share}%"></div></div><div class="war-gains"><span>${ga} captured</span><span>${gb} captured</span></div><button class="full" data-war-peace="${a},${b}">Negotiate peace</button></article>`;
       })
       .join("") ||
     '<p class="setting-note">The world is at peace. Wars will appear here as rival nations clash.</p>';
@@ -754,7 +786,7 @@ function renderTurn() {
     .filter((n) => n.delta !== 0)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   $("#turn-report").innerHTML =
-    `<div class="eyebrow">${lastTurn.years}-YEAR CHAPTER</div><h2>${lastTurn.years === 1 ? `Year ${lastTurn.year}` : `Years ${lastTurn.startYear + 1}–${lastTurn.year}`}</h2><p class="turn-headline">${esc(lastTurn.headline.split(". ")[0])}</p><div class="turn-totals"><div><strong>${lastTurn.claimed}</strong><span>NEWLY SETTLED</span></div><div><strong>${lastTurn.transferred}</strong><span>CHANGED HANDS</span></div><div><strong>${lastTurn.events.length}</strong><span>EVENTS</span></div></div><button id="replay-turn" class="full">↻ Replay border changes</button><h3>THIS TURN'S EVENTS</h3>${lastTurn.events.map((e) => `<article class="turn-event ${["war", "battle", "fall", "hardship"].includes(e.type) ? "conflict" : "peace"}"><span>YEAR ${e.year} · ${esc(e.type.toUpperCase())}</span><h4>${esc(e.text.split(". ")[0])}</h4><p>${esc(e.text.split(". ").slice(1).join(". ") || "A new chapter in the history of this world.")}</p></article>`).join("") || '<p class="setting-note">No major events in this chapter.</p>'}<h3>TERRITORY CHANGES</h3>${movers.map((n) => `<button class="turn-nation" data-turn-nation="${n.id}"><i class="flag" style="background:${n.color}"></i><span>${esc(n.name)}<small>${n.before} → ${n.after} tiles</small></span><b class="${n.delta > 0 ? "gain" : "loss"}">${n.delta > 0 ? "+" : ""}${n.delta}</b></button>`).join("") || '<p class="setting-note">All borders held this turn.</p>'}<p class="setting-note">Green outlines show new settlements; amber marks land that changed hands. Toggle “Changes” above the map to compare. Take your time—nothing moves until the next turn.</p>`;
+    `<div class="eyebrow">${lastTurn.years}-YEAR CHAPTER</div><h2>${lastTurn.years === 1 ? `Year ${lastTurn.year}` : `Years ${lastTurn.startYear + 1}–${lastTurn.year}`}</h2><p class="turn-headline">${esc(lastTurn.headline.split(". ")[0])}</p><div class="turn-totals"><div><strong>${lastTurn.claimed}</strong><span>NEWLY SETTLED</span></div><div><strong>${lastTurn.transferred}</strong><span>CHANGED HANDS</span></div><div><strong>${lastTurn.events.length}</strong><span>EVENTS</span></div></div><button id="replay-turn" class="full">↻ Replay border changes</button><h3>THIS TURN'S EVENTS</h3>${lastTurn.events.map((e) => `<article class="turn-event ${e.type === "crisis" ? "crisis" : ["war", "battle", "fall", "hardship"].includes(e.type) ? "conflict" : "peace"}"><span>YEAR ${e.year} · ${esc(e.type.toUpperCase())}</span><h4>${esc(e.text.split(". ")[0])}</h4><p>${esc(e.text.split(". ").slice(1).join(". ") || "A new chapter in the history of this world.")}</p></article>`).join("") || '<p class="setting-note">No major events in this chapter.</p>'}<h3>TERRITORY CHANGES</h3>${movers.map((n) => `<button class="turn-nation" data-turn-nation="${n.id}"><i class="flag" style="background:${n.color}"></i><span>${esc(n.name)}<small>${n.before} → ${n.after} tiles</small></span><b class="${n.delta > 0 ? "gain" : "loss"}">${n.delta > 0 ? "+" : ""}${n.delta}</b></button>`).join("") || '<p class="setting-note">All borders held this turn.</p>'}<p class="setting-note">Green outlines show new settlements; amber marks land that changed hands. Toggle “Changes” above the map to compare. Take your time—nothing moves until the next turn.</p>`;
 }
 $("#turn-report").onclick = (e) => {
   if (e.target.closest("#replay-turn") && lastPlayback && !pendingTurn) {

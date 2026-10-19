@@ -78,18 +78,36 @@ test("peace blocks AI declarations for 15 years and manual war can override a tr
   assert.ok(s.warStats["0,1"].some((n) => n > 0));
   peace(s, 0, 1);
   assert.equal(hasTruce(s, 0, 1), true);
-  assert.equal(declareWar(s, 0, 1, { force: false }), false);
+  assert.equal(
+    declareWar(s, 0, 1, {
+      force: false,
+      reason: "A renewed territorial dispute",
+    }),
+    false,
+  );
   assert.equal(s.warStats["0,1"], undefined);
   s.settings.wars = false;
   s.settings.alliances = false;
   s.settings.revolts = false;
   for (let i = 0; i < 14; i++) {
     tick(s);
-    assert.equal(declareWar(s, 0, 1, { force: false }), false);
+    assert.equal(
+      declareWar(s, 0, 1, {
+        force: false,
+        reason: "A renewed territorial dispute",
+      }),
+      false,
+    );
   }
   tick(s);
   assert.equal(hasTruce(s, 0, 1), false);
-  assert.equal(declareWar(s, 0, 1, { force: false }), true);
+  assert.equal(
+    declareWar(s, 0, 1, {
+      force: false,
+      reason: "A renewed territorial dispute",
+    }),
+    true,
+  );
   peace(s, 0, 1);
   assert.equal(declareWar(s, 0, 1), true);
   assert.equal(hasTruce(s, 0, 1), false);

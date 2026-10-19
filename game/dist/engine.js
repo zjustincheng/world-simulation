@@ -1,3 +1,10 @@
+import {
+  relation,
+  recordLoss,
+  settleRelation,
+  diplomacyTick,
+  considerSettlement,
+} from "./diplomacy.js";
 // Deterministic tile simulation. -1 = water, -2 = unclaimed land.
 import { REAL_MAPS } from "./real-maps.js";
 import { generateNationName } from "./names.js";
@@ -100,6 +107,8 @@ export function createWorld(
     wars: [],
     truces: [],
     warStats: {},
+    relations: {},
+    warHistory: [],
     alliances: [],
     events: [],
     flashes: [],
@@ -308,6 +317,12 @@ export function reconcile(s) {
     if (s.owner[n.capital] !== id) n.capital = s.owner.indexOf(id);
     n.population = Math.max(100, n.population);
   });
+  for (const record of s.warHistory || [])
+    if (record.ended === null && (!counts[record.a] || !counts[record.b])) {
+      record.ended = s.year;
+      record.outcome =
+        "The war ends with the loss of a belligerent's independent territory.";
+    }
   for (const key of ["wars", "alliances"])
     s[key] = s[key].filter((p) => counts[p[0]] && counts[p[1]]);
   s.truces = (s.truces || []).filter(
@@ -321,11 +336,12 @@ export function reconcile(s) {
 }
 export const hasTruce = (s, a, b) =>
   (s.truces || []).some((p) => related([p], a, b) && p[2] > s.year);
-export function declareWar(s, a, b, { force = true } = {}) {
+export function declareWar(s, a, b, { force = true, reason = null } = {}) {
   const counts = stats(s);
   if (a === b || !counts[a] || !counts[b] || related(s.wars, a, b))
     return false;
-  if (!force && hasTruce(s, a, b)) return false;
+  if (!force && (hasTruce(s, a, b) || related(s.alliances, a, b) || !reason))
+    return false;
   if (hasTruce(s, a, b))
     log(
       s,
@@ -337,14 +353,42 @@ export function declareWar(s, a, b, { force = true } = {}) {
   s.wars.push([...pair(a, b), s.year]);
   s.warStats ||= {};
   s.warStats[pair(a, b).join(",")] = [0, 0];
+  const [first, second] = pair(a, b);
+  const cause =
+    reason ||
+    "a direct intervention by the player orders this war, overriding ordinary diplomacy";
+  s.warHistory ||= [];
+  if (s.warHistory.length >= 2048)
+    s.warHistory.splice(
+      Math.max(
+        0,
+        s.warHistory.findIndex((r) => r.ended !== null),
+      ),
+      1,
+    );
+  s.warHistory.push({
+    a: first,
+    b: second,
+    initiator: a,
+    started: s.year,
+    ended: null,
+    reason: cause,
+    initial: [counts[first], counts[second]],
+    outcome: "",
+  });
   log(
     s,
-    `${s.nations[a].name} declares war on ${s.nations[b].name}. Envoys leave empty-handed as troops assemble along the frontier. The coming years will test both treasuries and armies.`,
+    `${s.nations[a].name} declares war on ${s.nations[b].name}. The stated cause is that ${cause}.`,
     "war",
   );
   return true;
 }
-export function peace(s, a, b = null) {
+export function peace(
+  s,
+  a,
+  b = null,
+  { reason = "Negotiators agree to end the war" } = {},
+) {
   const ended = s.wars.filter(
     (p) =>
       (p[0] === a || p[1] === a) && (b === null || p[0] === b || p[1] === b),
@@ -354,14 +398,26 @@ export function peace(s, a, b = null) {
   for (const [first, second] of ended) {
     s.truces = s.truces.filter((p) => !related([p], first, second));
     s.truces.push([first, second, s.year + 15]);
-    if (s.warStats) delete s.warStats[`${first},${second}`];
-  }
-  if (ended.length)
+    const gains = s.warStats?.[`${first},${second}`] || [0, 0];
+    const net = gains[0] - gains[1];
+    const outcome = net
+      ? `${s.nations[net > 0 ? first : second].name} retains a net gain of ${Math.abs(net)} tiles from the fighting`
+      : "neither side retains a net territorial gain from the fighting";
+    const record = (s.warHistory || []).findLast(
+      (r) => r.ended === null && r.a === first && r.b === second,
+    );
+    if (record) {
+      record.ended = s.year;
+      record.outcome = outcome;
+    }
+    settleRelation(s, first, second);
     log(
       s,
-      `${s.nations[a].name} signs ${b === null ? "a peace accord" : `peace with ${s.nations[b].name}`}. A 15-year truce begins.`,
+      `The settlement of year ${s.year}. ${reason}. ${outcome}. Both governments recognize the new frontier and renounce their claims; a 15-year truce begins.`,
       "peace",
     );
+    if (s.warStats) delete s.warStats[`${first},${second}`];
+  }
   return ended.length;
 }
 export function ally(s, a, b) {
@@ -369,6 +425,12 @@ export function ally(s, a, b) {
   if (a === b || !counts[a] || !counts[b]) return false;
   if (related(s.alliances, a, b)) {
     s.alliances = s.alliances.filter((p) => !related([p], a, b));
+    const r = relation(s, a, b);
+    r.tension = Math.max(r.tension, 24);
+    r.since = s.year;
+    r.stage = 0;
+    r.initiator = b;
+    r.reason = `${s.nations[b].name} seeks security guarantees after ${s.nations[a].name} ended their alliance`;
     log(
       s,
       `${s.nations[a].name} ends its alliance with ${s.nations[b].name}.`,
@@ -377,6 +439,7 @@ export function ally(s, a, b) {
     return false;
   }
   peace(s, a, b);
+  settleRelation(s, a, b);
   s.alliances.push(pair(a, b));
   log(
     s,
@@ -452,7 +515,9 @@ export function rebel(s, a) {
     "birth",
   );
   reconcile(s);
-  declareWar(s, id, a);
+  declareWar(s, id, a, {
+    reason: `${s.nations[id].name} seeks independence from ${old.name}, whose government refuses to recognize the breakaway state`,
+  });
   return true;
 }
 export function paint(s, cell, radius, mode, nation = null) {
@@ -586,6 +651,7 @@ function capture(s, cell, winner, loser, budget) {
   }
   if (taken)
     s.flashes.push({ cell, color: s.nations[winner].color, year: s.year });
+  if (taken) recordLoss(s, winner, loser, taken);
   const key = pair(winner, loser).join(",");
   s.warStats ||= {};
   s.warStats[key] ||= [0, 0];
@@ -615,40 +681,7 @@ export function tick(s) {
           if (landings.length) s.owner[pick(s, landings)] = n.id;
         }
   }
-  for (const key of borders.keys()) {
-    const [a, b] = key.split(",").map(Number);
-    if (related(s.wars, a, b) || related(s.alliances, a, b)) continue;
-    if (
-      s.settings.wars &&
-      random(s) <
-        0.028 *
-          s.settings.aggression *
-          (s.nations[a].aggression + s.nations[b].aggression)
-    )
-      declareWar(s, a, b, { force: false });
-    else if (s.settings.alliances && random(s) < 0.004) ally(s, a, b);
-  }
-  // Overseas rivals must be reachable by a short water crossing.
-  if (s.settings.wars && s.year % 16 === 0) {
-    const living = s.nations.filter((n) => before[n.id] && coasts[n.id].length);
-    if (living.length > 1) {
-      const a = pick(s, living);
-      const targets = [
-        ...new Set(
-          nearbySeaLandings(s, a.id, null, coasts[a.id]).map((i) => s.owner[i]),
-        ),
-      ].filter(
-        (id) => !related(s.alliances, a.id, id) && !hasTruce(s, a.id, id),
-      );
-      const b = targets.length ? s.nations[pick(s, targets)] : null;
-      if (
-        b &&
-        !related(s.alliances, a.id, b.id) &&
-        random(s) < 0.6 * s.settings.aggression
-      )
-        declareWar(s, a.id, b.id, { force: false });
-    }
-  }
+  diplomacyTick(s, borders, coasts, before);
   const fronts = Array(s.nations.length).fill(0);
   for (const [a, b] of s.wars) {
     fronts[a]++;
@@ -702,7 +735,7 @@ export function tick(s) {
         }
       }
     }
-    if (s.year - started > 25 && random(s) < 0.012) peace(s, a, b);
+    considerSettlement(s, a, b, started, before);
   }
   const after = stats(s);
   for (const n of s.nations) {
@@ -862,6 +895,72 @@ export function validate(input) {
   )
     fail();
   for (const [a, b] of s.wars) s.warStats[`${a},${b}`] ??= [0, 0];
+  s.relations ??= {};
+  s.warHistory ??= [];
+  if (
+    !s.relations ||
+    typeof s.relations !== "object" ||
+    Array.isArray(s.relations) ||
+    Object.keys(s.relations).length > MAX_NATIONS ** 2
+  )
+    fail();
+  for (const [key, r] of Object.entries(s.relations)) {
+    if (
+      !r ||
+      !integer(r.a) ||
+      !integer(r.b) ||
+      r.a < 0 ||
+      r.b >= s.nations.length ||
+      r.a >= r.b ||
+      key !== `${r.a},${r.b}` ||
+      ![r.a, r.b].includes(r.initiator) ||
+      !finite(r.tension) ||
+      r.tension < 0 ||
+      r.tension > 100 ||
+      !integer(r.stage) ||
+      r.stage < 0 ||
+      r.stage > 3 ||
+      !integer(r.since) ||
+      r.since < 1 ||
+      r.since > s.year ||
+      typeof r.reason !== "string" ||
+      r.reason.length > 800 ||
+      ![r.claims, r.baseline].every(
+        (p) =>
+          Array.isArray(p) &&
+          p.length === 2 &&
+          p.every((n) => integer(n) && n >= 0),
+      )
+    )
+      fail();
+  }
+  if (
+    !Array.isArray(s.warHistory) ||
+    s.warHistory.length > 2048 ||
+    !s.warHistory.every(
+      (r) =>
+        r &&
+        integer(r.a) &&
+        integer(r.b) &&
+        r.a >= 0 &&
+        r.b < s.nations.length &&
+        r.a < r.b &&
+        [r.a, r.b].includes(r.initiator) &&
+        integer(r.started) &&
+        r.started >= 1 &&
+        r.started <= s.year &&
+        (r.ended === null ||
+          (integer(r.ended) && r.ended >= r.started && r.ended <= s.year)) &&
+        typeof r.reason === "string" &&
+        r.reason.length <= 1000 &&
+        typeof r.outcome === "string" &&
+        r.outcome.length <= 1000 &&
+        Array.isArray(r.initial) &&
+        r.initial.length === 2 &&
+        r.initial.every((n) => integer(n) && n >= 0),
+    )
+  )
+    fail();
   if (
     !s.settings ||
     !["ai", "wars", "alliances", "revolts", "expansion"].every(
