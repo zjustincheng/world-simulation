@@ -51,8 +51,10 @@ test("settlements grow into neutral land and do not turn water into territory", 
 test("four centuries of conflict conserve land and keep valid nations and relations", () => {
   const s = createWorld("CONFLICT-2048", 16);
   const land = landCount(s);
+  let mostConcurrentWars = 0;
   for (let y = 0; y < 400; y++) {
     tick(s);
+    mostConcurrentWars = Math.max(mostConcurrentWars, s.wars.length);
     validate(s);
     assert.equal(landCount(s), land);
     s.nations.forEach((n) => {
@@ -60,7 +62,9 @@ test("four centuries of conflict conserve land and keep valid nations and relati
     });
   }
   assert.equal(s.year, 401);
-  assert.ok(s.events.some((e) => e.type === "war" || e.type === "battle"));
+  assert.ok(s.warHistory.length > 0);
+  assert.ok(mostConcurrentWars > 1);
+  assert.ok(new Set(s.warHistory.flatMap((war) => [war.a, war.b])).size >= 8);
 });
 
 test("war moves borders, alliances stop wars, peace and annexation work", () => {
@@ -101,6 +105,18 @@ test("alliance pacts form multi-country blocs and player wars break the linking 
   );
   assert.equal(declareWar(s, 0, 2), true);
   assert.equal(allied(s, 0, 2), false);
+  validate(s);
+});
+
+test("a threatened alliance member can bring neighboring allies into a war", () => {
+  const s = createWorld("alliance-cascade", 3, "arena");
+  ally(s, 1, 2);
+  assert.equal(declareWar(s, 0, 1, { reason: "a contested frontier" }), true);
+  assert.ok(s.wars.some((war) => war[0] === 0 && war[1] === 1));
+  assert.ok(s.wars.some((war) => war[0] === 0 && war[1] === 2));
+  assert.ok(
+    s.warHistory.some((war) => war.reason.includes("honors its alliance")),
+  );
   validate(s);
 });
 

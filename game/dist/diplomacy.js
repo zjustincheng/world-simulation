@@ -124,16 +124,16 @@ export function diplomacyTick(s, borders, coasts, sizes) {
           r.initiator = expanding === a ? b : a;
           r.reason = `${s.nations[r.initiator].name} demands limits on ${s.nations[expanding].name}'s expansion along their shared frontier`;
         } else if (
-          (borders.get(key)?.length || 0) >= 24 &&
-          Math.max(A.aggression, B.aggression) >= 0.86
+          (borders.get(key)?.length || 0) >= 18 &&
+          Math.max(A.aggression, B.aggression) >= 0.82
         ) {
           r.initiator = A.aggression > B.aggression ? a : b;
           r.reason = `the government of ${s.nations[r.initiator].name} pursues a revision of the settled border with ${s.nations[r.initiator === a ? b : a].name}`;
         } else if (
           (borders.get(key)?.length || 0) >= 12 &&
-          s.year - r.since >= 20 &&
+          s.year - r.since >= 15 &&
           Math.min(A.wealth, B.wealth) >= 60 &&
-          Math.max(A.aggression, B.aggression) >= 0.8
+          Math.max(A.aggression, B.aggression) >= 0.78
         ) {
           const current = [
             militaryIndex(s, a, sizes[a]),
@@ -144,10 +144,10 @@ export function diplomacyTick(s, borders, coasts, sizes) {
             Math.max(1, current[1]) /
             (r.strength[0] / Math.max(1, r.strength[1]));
           const challenger =
-            relativeShift >= 1.35 ? a : relativeShift <= 1 / 1.35 ? b : -1;
+            relativeShift >= 1.2 ? a : relativeShift <= 1 / 1.2 ? b : -1;
           if (
             challenger >= 0 &&
-            s.nations[challenger].aggression >= 0.8 &&
+            s.nations[challenger].aggression >= 0.78 &&
             current[challenger === a ? 0 : 1] /
               Math.max(1, current[challenger === a ? 1 : 0]) >=
               0.7
@@ -180,10 +180,8 @@ export function diplomacyTick(s, borders, coasts, sizes) {
     }
     const attacker = s.nations[r.initiator],
       target = r.initiator === a ? b : a;
-    const alreadyFighting = s.wars.some(
-      (p) => p[0] === attacker.id || p[1] === attacker.id,
-    );
-    if (alreadyFighting || attacker.wealth < 60 || attacker.stability < 45) {
+    const activeFronts = s.wars.filter((p) => p.includes(attacker.id)).length;
+    if (activeFronts >= 2 || attacker.wealth < 60 || attacker.stability < 45) {
       r.tension = Math.max(0, r.tension - 5);
       continue;
     }

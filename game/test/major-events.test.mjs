@@ -91,7 +91,7 @@ test("world roundup includes simultaneous conflicts and alliances across countri
   declareWar(s, 2, 3, { reason: "an eastern independence claim" });
   const owners = [...s.owner];
   const report = advanceToMajorEvent(s);
-  assert.equal(report.roundup.wars.length, 2);
+  assert.ok(report.roundup.wars.length >= 2);
   assert.ok(report.roundup.wars.every((w) => w.text.startsWith("War ended")));
   assert.ok(report.roundup.wars.some((w) => w.text.includes("western border")));
   assert.ok(

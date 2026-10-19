@@ -768,7 +768,12 @@ export function reconcile(s) {
 }
 export const hasTruce = (s, a, b) =>
   (s.truces || []).some((p) => related([p], a, b) && p[2] > s.year);
-export function declareWar(s, a, b, { force = true, reason = null } = {}) {
+export function declareWar(
+  s,
+  a,
+  b,
+  { force = true, reason = null, cascade = true } = {},
+) {
   const counts = stats(s);
   if (a === b || !counts[a] || !counts[b] || related(s.wars, a, b))
     return false;
@@ -782,7 +787,13 @@ export function declareWar(s, a, b, { force = true, reason = null } = {}) {
     );
   s.truces = (s.truces || []).filter((p) => !related([p], a, b));
   if (pactPath.length) {
-    const broken = new Set(pactPath.map((p) => p.join(",")));
+    const broken = new Set();
+    let path = pactPath;
+    while (path.length) {
+      for (const edge of path) broken.add(edge.join(","));
+      s.alliances = s.alliances.filter((edge) => !broken.has(edge.join(",")));
+      path = alliancePath(s, a, b);
+    }
     s.alliances = s.alliances.filter((p) => !broken.has(p.join(",")));
     log(
       s,
@@ -821,6 +832,27 @@ export function declareWar(s, a, b, { force = true, reason = null } = {}) {
     `${s.nations[a].name} declares war on ${s.nations[b].name}. The stated cause is that ${cause}.`,
     "war",
   );
+  if (cascade && s.settings.alliances) {
+    const { borders } = frontiers(s);
+    for (const [allyOf, opposing] of [
+      [a, b],
+      [b, a],
+    ])
+      for (const member of allianceMembers(s, allyOf)) {
+        const key = pair(member, opposing).join(",");
+        if (
+          counts[member] &&
+          (borders.get(key)?.length || 0) > 0 &&
+          !related(s.wars, member, opposing) &&
+          !allied(s, member, opposing)
+        )
+          declareWar(s, member, opposing, {
+            force: true,
+            cascade: false,
+            reason: `${s.nations[member].name} honors its alliance with ${s.nations[allyOf].name} and enters the war against ${s.nations[opposing].name}`,
+          });
+      }
+  }
   return true;
 }
 export function peace(

@@ -65,7 +65,7 @@ test("negotiation can settle a grievance without fighting and preserves the pact
   );
   validate(s);
 });
-test("alliances, existing fronts and an empty treasury prevent opportunistic wars", () => {
+test("alliances, two-front limits and an empty treasury restrain opportunistic wars", () => {
   for (const mode of ["alliance", "treasury"]) {
     const s = world();
     s.nations[0].aggression = 0.95;
@@ -76,10 +76,11 @@ test("alliances, existing fronts and an empty treasury prevent opportunistic war
     }
     assert.equal(s.wars.length, 0);
   }
-  const s = createWorld("fronts", 3, "arena");
+  const s = createWorld("fronts", 4, "arena");
   s.settings.revolts = false;
   declareWar(s, 0, 1);
-  const r = relation(s, 0, 2);
+  declareWar(s, 0, 2);
+  const r = relation(s, 0, 3);
   r.reason = "a territorial claim";
   r.initiator = 0;
   r.stage = 3;
@@ -88,7 +89,7 @@ test("alliances, existing fronts and an empty treasury prevent opportunistic war
   s.year = 30;
   tick(s);
   assert.equal(
-    s.wars.some((p) => p[0] === 0 && p[1] === 2),
+    s.wars.some((p) => p[0] === 0 && p[1] === 3),
     false,
   );
 });
