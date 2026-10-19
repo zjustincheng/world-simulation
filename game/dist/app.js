@@ -21,7 +21,7 @@ import {
 import { REAL_MAPS } from "./real-maps.js";
 import { populateWorld } from "./setup.js";
 import { createSound } from "./sound.js";
-import { advanceTurn } from "./turns.js";
+import { advanceToMajorEvent } from "./turns.js";
 import { capitalRegion, generateNationName } from "./names.js";
 import {
   readSaves,
@@ -624,7 +624,7 @@ function nextTurn() {
   setTool("inspect");
   autoSave();
   const future = structuredClone(world);
-  const report = advanceTurn(future, Number($("#turn-years").value));
+  const report = advanceToMajorEvent(future);
   pendingTurn = {
     future,
     report,
@@ -659,7 +659,7 @@ function showTurnEvent() {
     ? "Watch this event →"
     : eventIndex < events.length - 1
       ? "Next event →"
-      : "Finish turn →";
+      : "Continue →";
 }
 $("#event-dialog").addEventListener("cancel", (e) => e.preventDefault());
 $("#event-continue").onclick = () => {
@@ -779,14 +779,14 @@ $("#show-changes").onchange = () => draw();
 function renderTurn() {
   if (!lastTurn) {
     $("#turn-report").innerHTML =
-      '<div class="panel-heading"><h2>Your next chapter</h2><p>Place nations or adjust the world, then press Next turn. Choose 1, 5, or 10 years per turn; five is the default. Nothing advances while you read or plan.</p></div><div class="turn-empty">◇<p>Events, border changes, and nation gains will appear here.</p></div>';
+      '<div class="panel-heading"><h2>Your next chapter</h2><p>Place nations or adjust the world, then press Next event. History advances to the next major development. Quiet years and small battles are summarized. Nothing advances while you read or plan.</p></div><div class="turn-empty">◇<p>Events, border changes, and nation gains will appear here.</p></div>';
     return;
   }
   const movers = lastTurn.nations
     .filter((n) => n.delta !== 0)
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   $("#turn-report").innerHTML =
-    `<div class="eyebrow">${lastTurn.years}-YEAR CHAPTER</div><h2>${lastTurn.years === 1 ? `Year ${lastTurn.year}` : `Years ${lastTurn.startYear + 1}–${lastTurn.year}`}</h2><p class="turn-headline">${esc(lastTurn.headline.split(". ")[0])}</p><div class="turn-totals"><div><strong>${lastTurn.claimed}</strong><span>NEWLY SETTLED</span></div><div><strong>${lastTurn.transferred}</strong><span>CHANGED HANDS</span></div><div><strong>${lastTurn.events.length}</strong><span>EVENTS</span></div></div><button id="replay-turn" class="full">↻ Replay border changes</button><h3>THIS TURN'S EVENTS</h3>${lastTurn.events.map((e) => `<article class="turn-event ${e.type === "crisis" ? "crisis" : ["war", "battle", "fall", "hardship"].includes(e.type) ? "conflict" : "peace"}"><span>YEAR ${e.year} · ${esc(e.type.toUpperCase())}</span><h4>${esc(e.text.split(". ")[0])}</h4><p>${esc(e.text.split(". ").slice(1).join(". ") || "A new chapter in the history of this world.")}</p></article>`).join("") || '<p class="setting-note">No major events in this chapter.</p>'}<h3>TERRITORY CHANGES</h3>${movers.map((n) => `<button class="turn-nation" data-turn-nation="${n.id}"><i class="flag" style="background:${n.color}"></i><span>${esc(n.name)}<small>${n.before} → ${n.after} tiles</small></span><b class="${n.delta > 0 ? "gain" : "loss"}">${n.delta > 0 ? "+" : ""}${n.delta}</b></button>`).join("") || '<p class="setting-note">All borders held this turn.</p>'}<p class="setting-note">Green outlines show new settlements; amber marks land that changed hands. Toggle “Changes” above the map to compare. Take your time—nothing moves until the next turn.</p>`;
+    `<div class="eyebrow">${lastTurn.years === 0 ? "HISTORY PAUSED" : `${lastTurn.years} ${lastTurn.years <= 1 ? "YEAR" : "YEARS"} ELAPSED`}</div><h2>${lastTurn.years <= 1 ? `Year ${lastTurn.year}` : `Years ${lastTurn.startYear + 1}–${lastTurn.year}`}</h2><p class="turn-headline">${esc(lastTurn.headline.split(". ")[0])}</p><div class="turn-totals"><div><strong>${lastTurn.claimed}</strong><span>NEWLY SETTLED</span></div><div><strong>${lastTurn.transferred}</strong><span>CHANGED HANDS</span></div><div><strong>${lastTurn.events.length}</strong><span>EVENTS</span></div></div><button id="replay-turn" class="full">↻ Replay border changes</button><h3>HISTORICAL SUMMARY</h3>${lastTurn.events.map((e) => `<article class="turn-event ${e.type === "crisis" ? "crisis" : ["war", "battle", "fall", "hardship"].includes(e.type) ? "conflict" : "peace"}"><span>YEAR ${e.year} · ${esc(e.type.toUpperCase())}</span><h4>${esc(e.text.split(". ")[0])}</h4><p>${esc(e.text.split(". ").slice(1).join(". ") || "A new chapter in the history of this world.")}</p></article>`).join("") || '<p class="setting-note">No major events in this chapter.</p>'}<h3>TERRITORY CHANGES</h3>${movers.map((n) => `<button class="turn-nation" data-turn-nation="${n.id}"><i class="flag" style="background:${n.color}"></i><span>${esc(n.name)}<small>${n.before} → ${n.after} tiles</small></span><b class="${n.delta > 0 ? "gain" : "loss"}">${n.delta > 0 ? "+" : ""}${n.delta}</b></button>`).join("") || '<p class="setting-note">All borders held this turn.</p>'}<p class="setting-note">Green outlines show new settlements; amber marks land that changed hands. Toggle “Changes” above the map to compare. Take your time—nothing moves until the next event.</p>`;
 }
 $("#turn-report").onclick = (e) => {
   if (e.target.closest("#replay-turn") && lastPlayback && !pendingTurn) {
@@ -854,12 +854,12 @@ function setTool(value) {
   const messages = {
     inspect: "Select a nation to inspect it. Drag to pan · Scroll to zoom",
     spawn:
-      "Click land to spawn nations · Right-drag to pan · Press Next turn when ready",
+      "Click land to spawn nations · Right-drag to pan · Press Next event when ready",
     territory:
       selected === null
         ? "Select a nation from the ranking, then paint its territory."
         : `Paint territory for ${world.nations[selected].name}. Escape to inspect.`,
-    land: "Drag to paint land. Nations act when you press Next turn.",
+    land: "Drag to paint land. Nations act when you press Next event.",
     water: "Drag to paint sea. Owned territory under the brush is removed.",
     erase: "Drag to remove ownership and leave unclaimed land.",
   };

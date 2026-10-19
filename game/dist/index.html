@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#111820" />
-    <title>World Simulation — Turn-Based Sandbox</title>
+    <title>World Simulation — Alternate History Sandbox</title>
     <meta
       name="description"
       content="A living world-war sandbox. Spawn nations, paint maps, forge alliances, and watch borders change."
@@ -112,24 +112,18 @@
           <div class="year-block">
             <span class="status-dot"></span>
             <div>
-              <small id="simulation-status">READY FOR YOUR NEXT TURN</small
+              <small id="simulation-status">READY FOR YOUR NEXT EVENT</small
               ><strong>Year <span id="year">1</span></strong>
             </div>
           </div>
           <div class="time-controls">
-            <label class="turn-length"
-              >Years / turn<select id="turn-years">
-                <option value="1">1 year</option>
-                <option value="5" selected>5 years</option>
-                <option value="10">10 years</option>
-              </select></label
-            ><button id="review-turn" disabled>Turn report</button
+            <button id="review-turn" disabled>Event report</button
             ><button
               id="next-turn"
               class="primary"
-              title="Resolve the selected number of years (Space)"
+              title="Advance to the next major historical event (Space)"
             >
-              Next turn →
+              Next event →
             </button>
           </div>
           <button
@@ -146,7 +140,7 @@
           <button class="active" data-panel="nations">
             Nations <span id="list-count"></span></button
           ><button data-panel="history">History</button
-          ><button data-panel="turn">Turn</button
+          ><button data-panel="turn">Event</button
           ><button data-panel="wars">Wars</button
           ><button data-panel="settings">Settings</button>
         </nav>
@@ -175,7 +169,7 @@
             <p>
               Leave the name blank to name it after its capital region. Hover
               over land for a preview, then click to place it. Keep placing
-              countries, then finish setup and advance one turn at a time.
+              countries, then finish setup and advance through major events.
             </p>
             <label
               >Nation name
@@ -439,7 +433,7 @@
         </li>
         <li>
           <b>Map editor:</b> place nations and paint land, sea, or ownership.
-          Time only advances when you press Next turn. Undo restores the last
+          Time only advances when you press Next event. Undo restores the last
           stroke.
         </li>
         <li>
@@ -447,8 +441,8 @@
           selected nation.
         </li>
         <li>
-          <b>Navigation:</b> drag to pan, scroll to zoom. Space advances one
-          turn. Escape returns to Inspect.
+          <b>Navigation:</b> drag to pan, scroll to zoom. Space advances to the
+          next major event. Escape returns to Inspect.
         </li>
       </ul>
       <button id="close-help" class="primary full">Let history unfold</button>

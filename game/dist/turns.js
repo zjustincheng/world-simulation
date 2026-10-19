@@ -305,3 +305,147 @@ export function advanceTurn(s, years = 5) {
     headline,
   };
 }
+
+// Seek the next historical turning point. The bound only prevents endless searches
+// in stable worlds; it is not a chosen turn length.
+export function advanceToMajorEvent(s) {
+  const before = stats(s);
+  if (!before.some(Boolean)) throw Error("Place at least one nation first.");
+  const startYear = s.year,
+    owners = [...s.owner],
+    gold = s.nations.map((n) => n.wealth);
+  const frames = [],
+    developments = [];
+  let milestone = "quiet";
+  if (s.settings.ai)
+    for (let elapsed = 1; elapsed <= 30; elapsed++) {
+      const previous = [...s.owner];
+      tick(s);
+      domesticEvent(s);
+      const annual = s.events.filter((e) => e.year === s.year);
+      const important = annual.filter(
+        (e) =>
+          ["war", "fall", "birth", "crisis", "battle"].includes(e.type) ||
+          (e.type === "peace" &&
+            /settlement|truce|compact|alliance|accord/i.test(e.text)),
+      );
+      developments.push(...important);
+      frames.push({
+        year: s.year,
+        changes: s.owner.flatMap((to, cell) =>
+          to === previous[cell] ? [] : [{ cell, from: previous[cell], to }],
+        ),
+      });
+      if (important.length) {
+        milestone = "development";
+        break;
+      }
+      const changed = s.owner.reduce(
+        (sum, to, cell) =>
+          sum + (to !== owners[cell] && to >= 0 && owners[cell] >= 0 ? 1 : 0),
+        0,
+      );
+      const settled = s.owner.reduce(
+        (sum, to, cell) => sum + (owners[cell] === NEUTRAL && to >= 0 ? 1 : 0),
+        0,
+      );
+      // Campaigns collect several years of skirmishes into a meaningful net shift.
+      if (
+        elapsed >= 3 &&
+        changed >= Math.max(40, before.reduce((a, b) => a + b, 0) * 0.025)
+      ) {
+        milestone = "campaign";
+        break;
+      }
+      if (settled >= Math.max(100, before.reduce((a, b) => a + b, 0) * 0.25)) {
+        milestone = "expansion";
+        break;
+      }
+    }
+  const after = stats(s),
+    changes = s.owner.flatMap((to, cell) =>
+      to === owners[cell] ? [] : [{ cell, from: owners[cell], to }],
+    );
+  const nations = s.nations.map((n) => ({
+    id: n.id,
+    name: n.name,
+    color: n.color,
+    before: before[n.id] || 0,
+    after: after[n.id],
+    delta: after[n.id] - (before[n.id] || 0),
+    goldDelta: Math.round(n.wealth - (gold[n.id] || 0)),
+  }));
+  const claimed = changes.filter((c) => c.from === NEUTRAL && c.to >= 0).length;
+  const transferred = changes.filter((c) => c.from >= 0 && c.to >= 0).length;
+  const priority = ["fall", "birth", "peace", "war", "crisis", "battle"];
+  developments.sort(
+    (a, b) => priority.indexOf(a.type) - priority.indexOf(b.type),
+  );
+  const main = developments[0];
+  const title = main
+    ? main.text.split(". ")[0]
+    : milestone === "campaign"
+      ? "A campaign reshapes the frontier"
+      : milestone === "expansion"
+        ? "An era of settlement"
+        : s.settings.ai
+          ? "An era of relative calm"
+          : "History is paused";
+  const elapsed = s.year - startYear;
+  const time = elapsed
+    ? `${elapsed === 1 ? "One year has" : `${elapsed} years have`} passed since the last event.`
+    : "Nation AI is disabled. Enable it in Settings to advance history.";
+  const account = main
+    ? [...new Set(developments.slice(0, 3).map((e) => e.text))].join(" ") +
+      (developments.length > 3
+        ? ` Another ${developments.length - 3} developments are recorded in History.`
+        : "")
+    : milestone === "campaign"
+      ? "Several seasons of fighting have produced a substantial shift in the balance of territory."
+      : milestone === "expansion"
+        ? "Continued settlement brings a substantial area of unclaimed land under national administration."
+        : s.settings.ai
+          ? "No major political turning point occurred during this interval. The existing order endured; routine economic and local developments continued."
+          : "";
+  const movers = nations
+    .filter((n) => n.delta)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  const territory = movers.length
+    ? ` Territorial balance: ${movers
+        .slice(0, 3)
+        .map(
+          (n) =>
+            `${n.name} ${n.delta > 0 ? "gained" : "lost"} ${Math.abs(n.delta)} tiles`,
+        )
+        .join(
+          "; ",
+        )}${movers.length > 3 ? `; ${movers.length - 3} other nations also changed size` : ""}.`
+    : " The overall territorial balance is unchanged.";
+  const text = `${title}. ${time} ${main ? account.slice(main.text.split(". ")[0].length + 2) : account}${territory}`;
+  const event = {
+    year: s.year,
+    type:
+      main?.type ||
+      (milestone === "campaign"
+        ? "battle"
+        : milestone === "expansion"
+          ? "expansion"
+          : "world"),
+    text,
+    changes,
+  };
+  if (elapsed) log(s, text.slice(0, 999), "chapter");
+  return {
+    year: s.year,
+    startYear,
+    years: elapsed,
+    frames,
+    claimed,
+    transferred,
+    changes,
+    nations,
+    events: [event],
+    headline: title,
+    milestone,
+  };
+}
