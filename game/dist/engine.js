@@ -1192,7 +1192,11 @@ export function validate(input) {
           Array.isArray(p) &&
           p.length === 2 &&
           p.every((n) => integer(n) && n >= 0),
-      )
+      ) ||
+      (r.strength !== undefined &&
+        (!Array.isArray(r.strength) ||
+          r.strength.length !== 2 ||
+          !r.strength.every((n) => finite(n) && n > 0)))
     )
       fail();
   }

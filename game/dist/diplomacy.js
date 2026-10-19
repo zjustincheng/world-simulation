@@ -9,6 +9,15 @@ import {
   log,
 } from "./engine.js";
 const keyOf = (a, b) => [Math.min(a, b), Math.max(a, b)].join(",");
+const militaryIndex = (s, id, size) => {
+  const n = s.nations[id];
+  return (
+    Math.sqrt(size + 40) *
+    n.efficiency *
+    (0.5 + Math.min(n.wealth, 500) / 500) *
+    (1 + (n.tech?.unlocked?.length || 0) * 0.055)
+  );
+};
 export function relation(s, a, b, sizes = stats(s)) {
   s.relations ||= {};
   const [first, second] = [Math.min(a, b), Math.max(a, b)];
@@ -22,6 +31,10 @@ export function relation(s, a, b, sizes = stats(s)) {
     stage: 0,
     claims: [0, 0],
     baseline: [sizes[first], sizes[second]],
+    strength: [
+      militaryIndex(s, first, sizes[first]),
+      militaryIndex(s, second, sizes[second]),
+    ],
   });
 }
 export function recordLoss(s, winner, loser, tiles) {
@@ -41,6 +54,10 @@ export function settleRelation(s, a, b) {
   // The treaty recognizes the new frontier; old territorial claims are relinquished.
   r.claims = [0, 0];
   r.baseline = [stats(s)[r.a], stats(s)[r.b]];
+  r.strength = [
+    militaryIndex(s, r.a, r.baseline[0]),
+    militaryIndex(s, r.b, r.baseline[1]),
+  ];
 }
 export function diplomacyTick(s, borders, coasts, sizes) {
   s.relations ||= {};
@@ -64,6 +81,10 @@ export function diplomacyTick(s, borders, coasts, sizes) {
   for (const key of candidates) {
     const [a, b] = key.split(",").map(Number),
       r = relation(s, a, b, sizes);
+    r.strength ||= [
+      militaryIndex(s, a, sizes[a]),
+      militaryIndex(s, b, sizes[b]),
+    ];
     if (!sizes[a] || !sizes[b] || related(s.wars, a, b)) continue;
     if (related(s.alliances, a, b) || hasTruce(s, a, b) || !s.settings.wars) {
       r.tension = Math.max(0, r.tension - 8);
@@ -92,6 +113,33 @@ export function diplomacyTick(s, borders, coasts, sizes) {
         ) {
           r.initiator = A.aggression > B.aggression ? a : b;
           r.reason = `the government of ${s.nations[r.initiator].name} pursues a revision of the settled border with ${s.nations[r.initiator === a ? b : a].name}`;
+        } else if (
+          (borders.get(key)?.length || 0) >= 12 &&
+          s.year - r.since >= 20 &&
+          Math.min(A.wealth, B.wealth) >= 60 &&
+          Math.max(A.aggression, B.aggression) >= 0.8
+        ) {
+          const current = [
+            militaryIndex(s, a, sizes[a]),
+            militaryIndex(s, b, sizes[b]),
+          ];
+          const relativeShift =
+            current[0] /
+            Math.max(1, current[1]) /
+            (r.strength[0] / Math.max(1, r.strength[1]));
+          const challenger =
+            relativeShift >= 1.35 ? a : relativeShift <= 1 / 1.35 ? b : -1;
+          if (
+            challenger >= 0 &&
+            s.nations[challenger].aggression >= 0.8 &&
+            current[challenger === a ? 0 : 1] /
+              Math.max(1, current[challenger === a ? 1 : 0]) >=
+              0.7
+          ) {
+            r.initiator = challenger;
+            const target = challenger === a ? b : a;
+            r.reason = `${s.nations[challenger].name} demands recognition of a changed military balance as its strength has risen sharply relative to ${s.nations[target].name} along their shared frontier`;
+          }
         }
       }
       if (!r.reason) {
