@@ -523,6 +523,12 @@ function refresh({ map = true } = {}) {
     lastPaint = performance.now();
   }
   $("#year").textContent = world.year;
+  const outlook = world.climate?.seasons || [];
+  $("#climate-label").textContent = outlook.length
+    ? outlook
+        .map((item) => `${item.season.slice(0, 3)} ${item.weather}`)
+        .join(" · ")
+    : "Seasonal outlook";
   $("#review-turn").disabled = !lastTurn;
   $("#nation-count").textContent = counts.filter(Boolean).length;
   $("#war-count").textContent = world.wars.length;
@@ -682,7 +688,10 @@ function renderWorldRoundup(report) {
           `<article class="roundup-item"><strong>${esc(item.title || `Year ${item.year}`)}</strong><p>${esc(item.text)}</p></article>`,
       )
       .join("");
-  return `<div class="world-roundup"><h3>AROUND THE WORLD</h3><details open><summary>Wars & settlements · ${r.wars.length}</summary>${cards(r.wars) || "<p>No wars during this period.</p>"}</details><details ${r.battles.length ? "open" : ""}><summary>Decisive battles · ${r.battles.length}</summary>${cards(r.battles) || "<p>No battles crossed the decisive threshold this chapter.</p>"}<p class="battle-legend">✦ A battle must take at least 20 tiles and 25% of the defender’s yearly territory; ★ marks a state’s final stand. Markers remain on the map until the next chapter.</p></details><details ${r.technologies.length ? "open" : ""}><summary>Technology & scholarship · ${r.technologies.length} discoveries</summary>${cards(r.technologies) || "<p>The kingdoms remain within the medieval age.</p>"}</details><details open><summary>Alliances & unions · ${r.alliances.length} active alliances</summary>${cards(r.alliances) || "<p>No active alliances.</p>"}${r.allianceEvents.length ? `<h4>Diplomatic changes</h4>${cards(r.allianceEvents)}` : "<p>No new unions or alliance changes were recorded.</p>"}</details><details ${r.politics.length ? "open" : ""}><summary>Countries & political changes · ${r.politics.length}</summary>${cards(r.politics) || "<p>No changes to statehood.</p>"}</details><details><summary>Negotiations & peace agreements · ${r.diplomacy.length}</summary>${cards(r.diplomacy) || "<p>No diplomatic developments recorded.</p>"}</details><details><summary>Other diplomatic crises · ${r.crises.length}</summary>${cards(r.crises) || "<p>No active crises.</p>"}</details></div>`;
+  const climate = r.climate
+    .map((item) => `${item.season}: ${item.weather}`)
+    .join(" · ");
+  return `<div class="world-roundup"><h3>AROUND THE WORLD</h3><details><summary>Seasonal outlook</summary><p>${esc(climate || "Seasonal conditions are not recorded.")}</p><p class="battle-legend">Weather varies by region and season. Rain, fog, storms, and winter conditions slow assaults and help defenders hold ground.</p></details><details open><summary>Wars & settlements · ${r.wars.length}</summary>${cards(r.wars) || "<p>No wars during this period.</p>"}</details><details ${r.battles.length ? "open" : ""}><summary>Decisive battles · ${r.battles.length}</summary>${cards(r.battles) || "<p>No battles crossed the decisive threshold this chapter.</p>"}<p class="battle-legend">✦ A battle must take at least 20 tiles and 25% of the defender’s yearly territory; ★ marks a state’s final stand. Markers remain on the map until the next chapter.</p></details><details><summary>Technology & scholarship · ${r.technologies.length} discoveries</summary>${cards(r.technologies) || "<p>The kingdoms remain within the medieval age.</p>"}</details><details open><summary>Alliances & unions · ${r.alliances.length} active alliances</summary>${cards(r.alliances) || "<p>No active alliances.</p>"}${r.allianceEvents.length ? `<h4>Diplomatic changes</h4>${cards(r.allianceEvents)}` : "<p>No new unions or alliance changes were recorded.</p>"}</details><details ${r.politics.length ? "open" : ""}><summary>Countries & political changes · ${r.politics.length}</summary>${cards(r.politics) || "<p>No changes to statehood.</p>"}</details><details><summary>Negotiations & peace agreements · ${r.diplomacy.length}</summary>${cards(r.diplomacy) || "<p>No diplomatic developments recorded.</p>"}</details><details><summary>Other diplomatic crises · ${r.crises.length}</summary>${cards(r.crises) || "<p>No active crises.</p>"}</details></div>`;
 }
 function showTurnEvent() {
   const { report, eventIndex } = pendingTurn;

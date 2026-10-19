@@ -335,6 +335,7 @@ export function advanceToMajorEvent(s) {
       developments.push(...important);
       frames.push({
         year: s.year,
+        climate: structuredClone(s.climate),
         battles: structuredClone(s.flashes || []),
         changes: s.owner.flatMap((to, cell) =>
           to === previous[cell] ? [] : [{ cell, from: previous[cell], to }],
@@ -487,7 +488,7 @@ export function advanceToMajorEvent(s) {
         : `Decisive battle · Year ${battle.year}`,
       text: battle.annihilated
         ? `${s.nations[battle.winner]?.name || "The victor"} routed the defenders and took their final ${battle.tiles} tiles on ${battle.terrain > 0.45 ? "mountainous" : battle.terrain > 0.25 ? "highland" : "open"} ground, ending the state.`
-        : `${s.nations[battle.winner]?.name || "The victor"} captured ${battle.campaignLoss} of ${battle.defenderTerritory} tiles (${Math.round((battle.campaignLoss / battle.defenderTerritory) * 100)}%) from ${s.nations[battle.loser]?.name || "the defender"} this year. This engagement broke the front on ${battle.terrain > 0.45 ? "mountainous" : battle.terrain > 0.25 ? "highland" : "open"} ground.`,
+        : `${s.nations[battle.winner]?.name || "The victor"} captured ${battle.campaignLoss} of ${battle.defenderTerritory} tiles (${Math.round((battle.campaignLoss / battle.defenderTerritory) * 100)}%) from ${s.nations[battle.loser]?.name || "the defender"} this year. This engagement broke the front on ${battle.terrain > 0.45 ? "mountainous" : battle.terrain > 0.25 ? "highland" : "open"} ground during ${battle.season || "the campaign"}${battle.weather && battle.weather !== "clear" ? ` amid ${battle.weather.replaceAll("-", " ")}` : " under clear skies"}.`,
     }));
   const roundup = {
     wars,
@@ -498,6 +499,7 @@ export function advanceToMajorEvent(s) {
     diplomacy,
     technologies,
     battles,
+    climate: s.climate?.seasons || [],
   };
   const title = !s.settings.ai
     ? "History is paused"

@@ -13,6 +13,29 @@ export const W = 160,
   WATER = -1,
   NEUTRAL = -2,
   MAX_NATIONS = 64;
+export const SEASONS = ["Spring", "Summer", "Autumn", "Winter"];
+function climateRoll(s, cell, seasonIndex) {
+  const y = Math.floor(cell / W),
+    latitude = Math.abs(y / H - 0.5) * 2;
+  let hash = Math.imul((s.rng ^ (cell + 1)) >>> 0, 2654435761);
+  hash ^= Math.imul((s.year + seasonIndex * 37) >>> 0, 2246822519);
+  const roll = (hash >>> 0) / 4294967296;
+  const winter = seasonIndex === 3,
+    summer = seasonIndex === 1;
+  if (winter && latitude > 0.42 && roll < 0.42) return "snow";
+  if (summer && latitude > 0.45 && roll < 0.22) return "storm";
+  if (roll < 0.12) return "fog";
+  if (roll < 0.34) return "rain";
+  if (roll < 0.39) return "storm";
+  return "clear";
+}
+function seasonalOutlook(s) {
+  const cell = s.owner.findIndex((owner) => owner >= 0);
+  return SEASONS.map((season, index) => ({
+    season,
+    weather: cell < 0 ? "clear" : climateRoll(s, cell, index),
+  }));
+}
 export const TECHNOLOGY_AGES = [
   {
     name: "Medieval",
@@ -359,6 +382,7 @@ export function createWorld(
     }
   }
   if (start === "borders") claimUnownedLand(s);
+  s.climate = { year: s.year, seasons: seasonalOutlook(s) };
   reconcile(s);
   s.nations.forEach((n) => {
     n.population = stats(s)[n.id] * 300;
@@ -799,6 +823,7 @@ function capture(
   battleLosses,
   battleMarked,
   territoryBaseline,
+  campaignWeather,
 ) {
   const queue = [cell],
     seen = new Set(queue);
@@ -849,6 +874,8 @@ function capture(
       capital: capturedCapital,
       annihilated,
       key: keyBattle,
+      season: campaignWeather?.season,
+      weather: campaignWeather?.weather,
     });
   }
   if (taken) recordLoss(s, winner, loser, taken);
@@ -860,6 +887,7 @@ function capture(
 }
 export function tick(s) {
   s.year++;
+  s.climate = { year: s.year, seasons: seasonalOutlook(s) };
   s.flashes = [];
   const before = stats(s);
   if (!s.settings.ai) return;
@@ -918,6 +946,9 @@ export function tick(s) {
           defender = attacker === a ? b : a;
         const target = edge.find((i) => s.owner[i] === defender);
         if (target === undefined) continue;
+        const seasonIndex = (r + s.year) % SEASONS.length;
+        const weather = climateRoll(s, target, seasonIndex);
+        const campaignWeather = { season: SEASONS[seasonIndex], weather };
         const height = Math.max(0, s.terrain[target]);
         const resistance = Math.max(
           0.35,
@@ -925,10 +956,27 @@ export function tick(s) {
             Math.max(0, height - 0.18) *
               (1.35 - technologyBonus(s.nations[attacker], "siege")),
         );
-        const attackPower = power(attacker);
+        const weatherAttack =
+          weather === "storm" || weather === "snow"
+            ? 0.78
+            : weather === "rain"
+              ? 0.88
+              : weather === "fog"
+                ? 0.93
+                : 1;
+        const weatherDefense =
+          weather === "snow" || weather === "storm"
+            ? 1.12
+            : weather === "fog"
+              ? 1.06
+              : 1;
+        const attackPower = power(attacker) * weatherAttack;
         const defensivePower =
           power(defender) *
-          (1 + height * 0.45 + technologyBonus(s.nations[defender], "defense"));
+          (1 +
+            height * 0.45 +
+            technologyBonus(s.nations[defender], "defense")) *
+          weatherDefense;
         const winner =
           random(s) < attackPower / (attackPower + defensivePower)
             ? attacker
@@ -944,6 +992,11 @@ export function tick(s) {
             Math.floor(
               (7 + random(s) * 20) *
                 resistance *
+                (weather === "storm" || weather === "snow"
+                  ? 0.65
+                  : weather === "rain"
+                    ? 0.8
+                    : 1) *
                 (1 + technologyBonus(s.nations[winner], "siege")),
             ),
           ),
@@ -951,6 +1004,7 @@ export function tick(s) {
           battleLosses,
           battleMarked,
           before,
+          campaignWeather,
         );
       }
     } else if (s.year % 4 === 0 && coasts[a].length && coasts[b].length) {
