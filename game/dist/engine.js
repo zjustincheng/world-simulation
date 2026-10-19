@@ -398,6 +398,47 @@ const pick = (s, values) => values[Math.floor(random(s) * values.length)];
 const pair = (a, b) => [Math.min(a, b), Math.max(a, b)];
 export const related = (list, a, b) =>
   list.some((p) => p[0] === Math.min(a, b) && p[1] === Math.max(a, b));
+export function alliancePath(s, a, b) {
+  const queue = [a],
+    previous = new Map([[a, null]]);
+  for (let head = 0; head < queue.length; head++) {
+    const current = queue[head];
+    if (current === b) break;
+    for (const [left, right] of s.alliances || []) {
+      const next = left === current ? right : right === current ? left : -1;
+      if (next >= 0 && !previous.has(next)) {
+        previous.set(next, current);
+        queue.push(next);
+      }
+    }
+  }
+  if (!previous.has(b)) return [];
+  const path = [];
+  for (let current = b; current !== a; current = previous.get(current))
+    path.push([
+      Math.min(current, previous.get(current)),
+      Math.max(current, previous.get(current)),
+    ]);
+  return path;
+}
+export const allied = (s, a, b) => a !== b && alliancePath(s, a, b).length > 0;
+export function allianceMembers(s, id) {
+  const members = new Set([id]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [a, b] of s.alliances || [])
+      if (members.has(a) && !members.has(b)) {
+        members.add(b);
+        changed = true;
+      } else if (members.has(b) && !members.has(a)) {
+        members.add(a);
+        changed = true;
+      }
+  }
+  members.delete(id);
+  return [...members];
+}
 export function log(s, text, type = "world") {
   s.events.unshift({ year: s.year, text, type });
   s.events.length = Math.min(s.events.length, 150);
@@ -731,8 +772,8 @@ export function declareWar(s, a, b, { force = true, reason = null } = {}) {
   const counts = stats(s);
   if (a === b || !counts[a] || !counts[b] || related(s.wars, a, b))
     return false;
-  if (!force && (hasTruce(s, a, b) || related(s.alliances, a, b) || !reason))
-    return false;
+  const pactPath = alliancePath(s, a, b);
+  if (!force && (hasTruce(s, a, b) || pactPath.length || !reason)) return false;
   if (hasTruce(s, a, b))
     log(
       s,
@@ -740,7 +781,15 @@ export function declareWar(s, a, b, { force = true, reason = null } = {}) {
       "war",
     );
   s.truces = (s.truces || []).filter((p) => !related([p], a, b));
-  s.alliances = s.alliances.filter((p) => !related([p], a, b));
+  if (pactPath.length) {
+    const broken = new Set(pactPath.map((p) => p.join(",")));
+    s.alliances = s.alliances.filter((p) => !broken.has(p.join(",")));
+    log(
+      s,
+      `${s.nations[a].name} breaks the alliance ties linking it to ${s.nations[b].name}.`,
+      "peace",
+    );
+  }
   s.wars.push([...pair(a, b), s.year]);
   s.warStats ||= {};
   s.warStats[pair(a, b).join(",")] = [0, 0];
@@ -1121,7 +1170,7 @@ export function tick(s) {
   }
   const power = (id) => {
     const n = s.nations[id];
-    const allySupport = s.alliances.filter((p) => p.includes(id)).length;
+    const allySupport = allianceMembers(s, id).length;
     return (
       ((20 + Math.sqrt(before[id]) * 2) *
         (n.efficiency / 100) *
@@ -1399,7 +1448,7 @@ export function validate(input) {
     )
       fail();
   }
-  if (s.wars.some((p) => related(s.alliances, p[0], p[1]))) fail();
+  if (s.wars.some((p) => allied(s, p[0], p[1]))) fail();
   s.truces ??= [];
   if (
     !Array.isArray(s.truces) ||

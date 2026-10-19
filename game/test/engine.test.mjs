@@ -18,6 +18,8 @@ import {
   WATER,
   NEUTRAL,
   neighbors,
+  allied,
+  allianceMembers,
 } from "../dist/engine.js";
 
 const landCount = (s) => s.owner.filter((n) => n !== WATER).length;
@@ -84,6 +86,21 @@ test("war moves borders, alliances stop wars, peace and annexation work", () => 
   assert.equal(stats(s)[0], total);
   assert.equal(stats(s)[1], 0);
   assert.notEqual(s.nations[1].dead, null);
+  validate(s);
+});
+
+test("alliance pacts form multi-country blocs and player wars break the linking pacts", () => {
+  const s = createWorld("three-state-pact", 3, "arena");
+  ally(s, 0, 1);
+  ally(s, 1, 2);
+  assert.equal(allied(s, 0, 2), true);
+  assert.deepEqual(allianceMembers(s, 0).sort(), [1, 2]);
+  assert.equal(
+    declareWar(s, 0, 2, { force: false, reason: "a border claim" }),
+    false,
+  );
+  assert.equal(declareWar(s, 0, 2), true);
+  assert.equal(allied(s, 0, 2), false);
   validate(s);
 });
 

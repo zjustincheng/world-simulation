@@ -1,4 +1,11 @@
-import { tick, stats, random, log, NEUTRAL } from "./engine.js";
+import {
+  tick,
+  stats,
+  random,
+  log,
+  NEUTRAL,
+  allianceMembers,
+} from "./engine.js";
 
 function domesticEvent(s, guaranteed = false) {
   const living = s.nations.filter((n) => stats(s)[n.id] > 0);
@@ -435,13 +442,27 @@ export function advanceToMajorEvent(s) {
         text: `Ongoing since year ${started}. The original cause was not recorded in this older world.`,
         year: s.year,
       });
-  const alliances = s.alliances.map(([a, b]) => ({
-    title: `${s.nations[a].name} & ${s.nations[b].name}`,
-    text: alliancesBefore.has(`${a},${b}`)
-      ? "Alliance remains in force."
-      : "A new alliance now joins these countries.",
-    year: s.year,
-  }));
+  const allianceGroups = new Map();
+  for (const [a] of s.alliances) {
+    const members = [a, ...allianceMembers(s, a)].sort((x, y) => x - y);
+    allianceGroups.set(members.join(","), members);
+  }
+  const alliances = [...allianceGroups.values()].map((members) => {
+    const memberSet = new Set(members);
+    const changed = s.alliances.some(
+      ([a, b]) =>
+        memberSet.has(a) &&
+        memberSet.has(b) &&
+        !alliancesBefore.has(`${a},${b}`),
+    );
+    return {
+      title: members.map((id) => s.nations[id].name).join(" · "),
+      text: changed
+        ? `${members.length} countries are linked in a shared alliance bloc.`
+        : `${members.length} countries remain joined by mutual alliance pacts.`,
+      year: s.year,
+    };
+  });
   const allianceEvents = developments.filter((e) =>
     /alliance|compact|annex|union/i.test(e.text),
   );

@@ -23,6 +23,8 @@ import {
   GOVERNMENTS,
   RELIGIONS,
   governmentName,
+  allied,
+  allianceMembers,
 } from "./engine.js";
 import { REAL_MAPS } from "./real-maps.js";
 import { populateWorld } from "./setup.js";
@@ -105,7 +107,7 @@ function mapColor(id, height) {
   if (layer === "diplomacy" && selected !== null) {
     if (id === selected) return "#e4c36b";
     if (related(world.wars, id, selected)) return "#dc6a66";
-    if (related(world.alliances, id, selected)) return "#64c697";
+    if (allied(world, id, selected)) return "#64c697";
     return "#62798d";
   }
   return world.nations[id].color;
@@ -425,9 +427,9 @@ function renderDetail(force = false) {
   const enemies = world.wars
     .filter((p) => p[0] === selected || p[1] === selected)
     .map((p) => world.nations[p[0] === selected ? p[1] : p[0]].name);
-  const allies = world.alliances
-    .filter((p) => p.includes(selected))
-    .map((p) => world.nations[p[0] === selected ? p[1] : p[0]].name);
+  const allies = allianceMembers(world, selected).map(
+    (id) => world.nations[id].name,
+  );
   detail.dataset.nation = selected;
   const tech = n.tech || { age: 0, progress: 0, unlocked: [] },
     currentAge = TECHNOLOGY_AGES[tech.age] || TECHNOLOGY_AGES[0],

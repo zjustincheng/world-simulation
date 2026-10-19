@@ -7,6 +7,7 @@ import {
   peace,
   ally,
   log,
+  allied,
 } from "./engine.js";
 const keyOf = (a, b) => [Math.min(a, b), Math.max(a, b)].join(",");
 const militaryIndex = (s, id, size) => {
@@ -101,7 +102,7 @@ export function diplomacyTick(s, borders, coasts, sizes) {
       militaryIndex(s, b, sizes[b]),
     ];
     if (!sizes[a] || !sizes[b] || related(s.wars, a, b)) continue;
-    if (related(s.alliances, a, b) || hasTruce(s, a, b) || !s.settings.wars) {
+    if (allied(s, a, b) || hasTruce(s, a, b) || !s.settings.wars) {
       r.tension = Math.max(0, r.tension - 8);
       continue;
     }
