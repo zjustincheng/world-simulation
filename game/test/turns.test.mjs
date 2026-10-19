@@ -64,7 +64,7 @@ test("default chapters resolve five years and retain events from every year", ()
   const a = createWorld("chapters", 8, "arena", "seeds");
   const report = advanceTurn(a);
   assert.deepEqual(
-    report.events,
+    report.events.map(({ changes, ...event }) => event),
     a.events.filter((e) => e.year > 1).sort((a, b) => b.year - a.year),
   );
   assert.equal(report.years, 5);
@@ -128,19 +128,20 @@ test("animation frames replay every annual ownership change to the exact final m
   assert.deepEqual(owners, s.owner);
 });
 
-test("territory dispatches report actual annual tile counts", () => {
+test("each event changes only its described territory and all events replay the final map", () => {
   const s = createWorld("dispatches", 6, "arena", "seeds");
+  const owners = [...s.owner];
   const report = advanceTurn(s);
-  for (const frame of report.frames) {
-    const dispatch = report.events.find(
-      (e) => e.year === frame.year && e.type === "expansion",
-    );
-    assert.ok(dispatch);
-    const count = Number(dispatch.text.match(/over (\d+) unclaimed/)[1]);
-    const totals = new Map();
-    for (const c of frame.changes)
-      if (c.from === NEUTRAL && c.to >= 0)
-        totals.set(c.to, (totals.get(c.to) || 0) + 1);
-    assert.equal(count, Math.max(...totals.values()));
+  for (const event of [...report.events].reverse()) {
+    if (event.type === "expansion") {
+      const count = Number(event.text.match(/over (\d+) unclaimed/)[1]);
+      assert.equal(count, event.changes.length);
+      assert.equal(new Set(event.changes.map((c) => c.to)).size, 1);
+    }
+    for (const change of event.changes) {
+      assert.equal(owners[change.cell], change.from);
+      owners[change.cell] = change.to;
+    }
   }
+  assert.deepEqual(owners, s.owner);
 });

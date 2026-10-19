@@ -593,15 +593,23 @@ function nextTurn() {
   autoSave();
   const future = structuredClone(world);
   const report = advanceTurn(future, Number($("#turn-years").value));
-  pendingTurn = { future, report, before: [...world.owner], eventIndex: 0 };
+  pendingTurn = {
+    future,
+    report,
+    before: [...world.owner],
+    initialBefore: [...world.owner],
+    eventIndex: 0,
+    staged: true,
+    events: [...report.events].reverse(),
+  };
   showTurnEvent();
   $("#event-dialog").showModal();
 }
 function showTurnEvent() {
   const { report, eventIndex } = pendingTurn;
-  const events = [...report.events].sort((a, b) => a.year - b.year);
+  const events = pendingTurn.events;
   const event = events[eventIndex];
-  $("#event-back").disabled = eventIndex === 0;
+  $("#event-back").hidden = true;
   $("#event-skip").hidden = eventIndex >= events.length - 1;
   $("#event-progress").textContent = event
     ? `EVENT ${eventIndex + 1} OF ${events.length} · YEAR ${event.year}`
@@ -612,27 +620,42 @@ function showTurnEvent() {
   $("#event-story").textContent = event
     ? event.text.split(". ").slice(1).join(". ")
     : "No major events were recorded. Continue to see how the map changed.";
-  $("#event-continue").textContent =
-    eventIndex < events.length - 1 ? "Next event →" : "Watch borders change →";
+  $("#event-note").textContent = event?.changes?.length
+    ? `${event.changes.length} tiles change in this event. Watch them move before continuing.`
+    : "This event has no separate territory changes. Continue when you’re ready.";
+  $("#event-continue").textContent = event?.changes?.length
+    ? "Watch this event →"
+    : eventIndex < events.length - 1
+      ? "Next event →"
+      : "Finish turn →";
 }
 $("#event-dialog").addEventListener("cancel", (e) => e.preventDefault());
 $("#event-continue").onclick = () => {
   if (!pendingTurn) return;
-  if (++pendingTurn.eventIndex < pendingTurn.report.events.length) {
-    showTurnEvent();
-    return;
-  }
-  $("#event-dialog").close();
-  startBorderAnimation();
+  const event = pendingTurn.events[pendingTurn.eventIndex];
+  if (event?.changes?.length) {
+    $("#event-dialog").close();
+    startBorderAnimation();
+  } else advanceEvent();
 };
-$("#event-back").onclick = () => {
-  if (pendingTurn && pendingTurn.eventIndex > 0) {
-    pendingTurn.eventIndex--;
+function advanceEvent() {
+  if (++pendingTurn.eventIndex < pendingTurn.events.length) {
     showTurnEvent();
+    if (!$("#event-dialog").open) $("#event-dialog").showModal();
+  } else {
+    $("#event-dialog").close();
+    pendingTurn.staged = false;
+    finishBorderAnimation();
   }
-};
+}
 $("#event-skip").onclick = () => {
   $("#event-dialog").close();
+  pendingTurn.remainingSteps = pendingTurn.events
+    .slice(pendingTurn.eventIndex)
+    .flatMap((event) =>
+      event.changes.map((change) => ({ ...change, year: event.year })),
+    );
+  pendingTurn.staged = false;
   startBorderAnimation();
 };
 $("#pause-animation").onclick = () => {
@@ -657,9 +680,15 @@ function startBorderAnimation() {
   $(".topbar").inert = true;
   $("#border-playback").hidden = false;
   sound.play(report.transferred ? "conflict" : "turn");
-  const steps = report.frames.flatMap((frame) =>
-    frame.changes.map((change) => ({ ...change, year: frame.year })),
-  );
+  const event = pendingTurn.staged
+    ? pendingTurn.events[pendingTurn.eventIndex]
+    : null;
+  const steps = event
+    ? event.changes.map((change) => ({ ...change, year: event.year }))
+    : pendingTurn.remainingSteps ||
+      report.frames.flatMap((frame) =>
+        frame.changes.map((change) => ({ ...change, year: frame.year })),
+      );
   $("#pause-animation").textContent = "Pause";
   borderAnimation = {
     steps,
@@ -675,9 +704,22 @@ function startBorderAnimation() {
 }
 function finishBorderAnimation() {
   if (!pendingTurn) return;
+  if (pendingTurn.staged) {
+    for (const change of borderAnimation.steps)
+      world.owner[change.cell] = change.to;
+    pendingTurn.before = [...world.owner];
+    borderAnimation = null;
+    $("main").inert = false;
+    $(".topbar").inert = false;
+    $("#border-playback").hidden = true;
+    rebuildMap();
+    draw();
+    advanceEvent();
+    return;
+  }
   if (!pendingTurn.replay)
     lastPlayback = {
-      before: [...pendingTurn.before],
+      before: [...(pendingTurn.initialBefore || pendingTurn.before)],
       future: structuredClone(pendingTurn.future),
       report: pendingTurn.report,
     };

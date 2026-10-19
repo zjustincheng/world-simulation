@@ -212,33 +212,33 @@ export function advanceTurn(s, years = 5) {
         ? []
         : [{ cell, from: previousOwners[cell], to }],
     );
+    const annualEvents = s.events
+      .filter((e) => e.year === s.year)
+      .map((e) => ({ ...e, changes: [] }))
+      .reverse();
     const campaigns = new Map();
     for (const change of annualChanges) {
-      if (change.to < 0) continue;
       const key = `${change.from},${change.to}`;
-      campaigns.set(key, (campaigns.get(key) || 0) + 1);
+      if (!campaigns.has(key)) campaigns.set(key, []);
+      campaigns.get(key).push(change);
     }
-    // The largest actual territorial movement becomes a dispatch, never an invented battle.
-    const largest = [...campaigns].sort((a, b) => b[1] - a[1])[0];
-    if (largest) {
-      const [from, to] = largest[0].split(",").map(Number),
-        tiles = largest[1];
-      const winner = s.nations[to];
+    // Each dispatch owns exactly the territory changes it describes.
+    for (const [key, changes] of campaigns) {
+      const [from, to] = key.split(",").map(Number),
+        tiles = changes.length;
       log(
         s,
-        from >= 0
-          ? `The frontier shifts. ${winner.name} takes ${tiles} tiles from ${s.nations[from].name} during this year's fighting. Cartographers redraw the frontier as the balance of territory changes.`
-          : `A new frontier opens. Settlers from ${winner.name} establish control over ${tiles} unclaimed tiles this year. New communities bring more land under the capital's authority.`,
+        to < 0
+          ? `An abandoned frontier. ${s.nations[from].name} loses control of ${tiles} tiles. These lands are now unclaimed.`
+          : from >= 0
+            ? `The frontier shifts. ${s.nations[to].name} takes ${tiles} tiles from ${s.nations[from].name} during this year's fighting. Watch this stretch of the frontier change hands.`
+            : `A new frontier opens. Settlers from ${s.nations[to].name} establish control over ${tiles} unclaimed tiles this year. Watch their new communities join the country.`,
         from >= 0 ? "battle" : "expansion",
       );
+      annualEvents.push({ ...s.events[0], changes });
     }
     frames.push({ year: s.year, changes: annualChanges });
-    turnEvents.push(
-      ...s.events
-        .filter((e) => e.year === s.year)
-        .map((e) => ({ ...e }))
-        .reverse(),
-    );
+    turnEvents.push(...annualEvents);
   }
   const after = stats(s),
     changes = [];
