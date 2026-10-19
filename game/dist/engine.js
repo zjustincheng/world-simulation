@@ -789,7 +789,17 @@ function frontiers(s) {
   }
   return { expansion, borders, coasts };
 }
-function capture(s, cell, winner, loser, budget, attacker = winner) {
+function capture(
+  s,
+  cell,
+  winner,
+  loser,
+  budget,
+  attacker = winner,
+  battleLosses,
+  battleMarked,
+  territoryBaseline,
+) {
   const queue = [cell],
     seen = new Set(queue);
   let head = 0,
@@ -818,6 +828,13 @@ function capture(s, cell, winner, loser, budget, attacker = winner) {
   }
   if (taken) {
     const terrain = s.terrain[cell];
+    const campaignLoss = (battleLosses[loser] || 0) + taken;
+    battleLosses[loser] = campaignLoss;
+    const massiveLoss =
+      campaignLoss >= Math.max(20, Math.ceil(territoryBaseline[loser] * 0.25));
+    const annihilated = stats(s)[loser] === 0;
+    const keyBattle = !battleMarked[loser] && (massiveLoss || annihilated);
+    if (keyBattle) battleMarked[loser] = true;
     s.flashes.push({
       cell,
       color: s.nations[winner].color,
@@ -826,9 +843,12 @@ function capture(s, cell, winner, loser, budget, attacker = winner) {
       loser,
       attacker,
       tiles: taken,
+      campaignLoss,
+      defenderTerritory: territoryBaseline[loser],
       terrain,
       capital: capturedCapital,
-      key: capturedCapital || taken >= 10 || terrain > 0.25,
+      annihilated,
+      key: keyBattle,
     });
   }
   if (taken) recordLoss(s, winner, loser, taken);
@@ -843,6 +863,8 @@ export function tick(s) {
   s.flashes = [];
   const before = stats(s);
   if (!s.settings.ai) return;
+  const battleLosses = Array(s.nations.length).fill(0),
+    battleMarked = Array(s.nations.length).fill(false);
   const { expansion, borders, coasts } = frontiers(s);
   if (s.settings.expansion) {
     // Shuffle frontier attempts so nations act together, without giving low IDs first choice.
@@ -926,6 +948,9 @@ export function tick(s) {
             ),
           ),
           attacker,
+          battleLosses,
+          battleMarked,
+          before,
         );
       }
     } else if (s.year % 4 === 0 && coasts[a].length && coasts[b].length) {
@@ -934,7 +959,17 @@ export function tick(s) {
       if (s.nations[winner].wealth > 30) {
         const landings = nearbySeaLandings(s, winner, loser, coasts[winner]);
         if (landings.length) {
-          capture(s, pick(s, landings), winner, loser, 4);
+          capture(
+            s,
+            pick(s, landings),
+            winner,
+            loser,
+            4,
+            winner,
+            battleLosses,
+            battleMarked,
+            before,
+          );
           s.nations[winner].wealth -= 20;
         }
       }

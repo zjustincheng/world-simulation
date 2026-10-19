@@ -474,17 +474,20 @@ export function advanceToMajorEvent(s) {
     .filter((battle) => battle.key)
     .sort(
       (a, b) =>
-        Number(b.capital) - Number(a.capital) ||
-        b.tiles - a.tiles ||
-        b.terrain - a.terrain,
+        Number(b.annihilated) - Number(a.annihilated) ||
+        b.campaignLoss / b.defenderTerritory -
+          a.campaignLoss / a.defenderTerritory ||
+        b.campaignLoss - a.campaignLoss,
     )
     .slice(0, 12)
     .map((battle) => ({
       ...battle,
-      title: battle.capital
-        ? `Capital battle · Year ${battle.year}`
-        : `Key battle · Year ${battle.year}`,
-      text: `${s.nations[battle.winner]?.name || "A rival army"} captured ${battle.tiles} tiles from ${s.nations[battle.loser]?.name || "the defender"} on ${battle.terrain > 0.45 ? "mountainous" : battle.terrain > 0.25 ? "highland" : "open"} ground${battle.capital ? ", including the capital" : ""}.`,
+      title: battle.annihilated
+        ? `Final stand · Year ${battle.year}`
+        : `Decisive battle · Year ${battle.year}`,
+      text: battle.annihilated
+        ? `${s.nations[battle.winner]?.name || "The victor"} routed the defenders and took their final ${battle.tiles} tiles on ${battle.terrain > 0.45 ? "mountainous" : battle.terrain > 0.25 ? "highland" : "open"} ground, ending the state.`
+        : `${s.nations[battle.winner]?.name || "The victor"} captured ${battle.campaignLoss} of ${battle.defenderTerritory} tiles (${Math.round((battle.campaignLoss / battle.defenderTerritory) * 100)}%) from ${s.nations[battle.loser]?.name || "the defender"} this year. This engagement broke the front on ${battle.terrain > 0.45 ? "mountainous" : battle.terrain > 0.25 ? "highland" : "open"} ground.`,
     }));
   const roundup = {
     wars,

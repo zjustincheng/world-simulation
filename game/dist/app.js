@@ -220,7 +220,7 @@ function draw(now = performance.now()) {
         (playbackYear !== undefined && battle.year <= playbackYear),
     )
     .filter((battle) => battle.key)
-    .slice(-12);
+    .slice(0, 12);
   for (const battle of battleMarks) {
     const x = (battle.cell % W) + 0.5,
       y = Math.floor(battle.cell / W) + 0.5;
@@ -229,14 +229,14 @@ function draw(now = performance.now()) {
     ctx.fillStyle = "#342b1bdc";
     ctx.lineWidth = 0.22;
     ctx.beginPath();
-    ctx.arc(x, y, battle.capital ? 1.15 : 0.82, 0, Math.PI * 2);
+    ctx.arc(x, y, battle.annihilated ? 1.15 : 0.82, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = "#fff3bf";
-    ctx.font = `bold ${battle.capital ? 1.2 : 0.95}px sans-serif`;
+    ctx.font = `bold ${battle.annihilated ? 1.2 : 0.95}px sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(battle.capital ? "★" : "✦", x, y);
+    ctx.fillText(battle.annihilated ? "★" : "✦", x, y);
     ctx.restore();
   }
   if (borderAnimation) {
@@ -682,7 +682,7 @@ function renderWorldRoundup(report) {
           `<article class="roundup-item"><strong>${esc(item.title || `Year ${item.year}`)}</strong><p>${esc(item.text)}</p></article>`,
       )
       .join("");
-  return `<div class="world-roundup"><h3>AROUND THE WORLD</h3><details open><summary>Wars & settlements · ${r.wars.length}</summary>${cards(r.wars) || "<p>No wars during this period.</p>"}</details><details ${r.battles.length ? "open" : ""}><summary>Key battles · ${r.battles.length}</summary>${cards(r.battles) || "<p>No decisive battles were recorded this chapter.</p>"}<p class="battle-legend">★ Capital battle · ✦ Major engagement. Markers remain on the map until the next chapter.</p></details><details ${r.technologies.length ? "open" : ""}><summary>Technology & scholarship · ${r.technologies.length} discoveries</summary>${cards(r.technologies) || "<p>The kingdoms remain within the medieval age.</p>"}</details><details open><summary>Alliances & unions · ${r.alliances.length} active alliances</summary>${cards(r.alliances) || "<p>No active alliances.</p>"}${r.allianceEvents.length ? `<h4>Diplomatic changes</h4>${cards(r.allianceEvents)}` : "<p>No new unions or alliance changes were recorded.</p>"}</details><details ${r.politics.length ? "open" : ""}><summary>Countries & political changes · ${r.politics.length}</summary>${cards(r.politics) || "<p>No changes to statehood.</p>"}</details><details><summary>Negotiations & peace agreements · ${r.diplomacy.length}</summary>${cards(r.diplomacy) || "<p>No diplomatic developments recorded.</p>"}</details><details><summary>Other diplomatic crises · ${r.crises.length}</summary>${cards(r.crises) || "<p>No active crises.</p>"}</details></div>`;
+  return `<div class="world-roundup"><h3>AROUND THE WORLD</h3><details open><summary>Wars & settlements · ${r.wars.length}</summary>${cards(r.wars) || "<p>No wars during this period.</p>"}</details><details ${r.battles.length ? "open" : ""}><summary>Decisive battles · ${r.battles.length}</summary>${cards(r.battles) || "<p>No battles crossed the decisive threshold this chapter.</p>"}<p class="battle-legend">✦ A battle must take at least 20 tiles and 25% of the defender’s yearly territory; ★ marks a state’s final stand. Markers remain on the map until the next chapter.</p></details><details ${r.technologies.length ? "open" : ""}><summary>Technology & scholarship · ${r.technologies.length} discoveries</summary>${cards(r.technologies) || "<p>The kingdoms remain within the medieval age.</p>"}</details><details open><summary>Alliances & unions · ${r.alliances.length} active alliances</summary>${cards(r.alliances) || "<p>No active alliances.</p>"}${r.allianceEvents.length ? `<h4>Diplomatic changes</h4>${cards(r.allianceEvents)}` : "<p>No new unions or alliance changes were recorded.</p>"}</details><details ${r.politics.length ? "open" : ""}><summary>Countries & political changes · ${r.politics.length}</summary>${cards(r.politics) || "<p>No changes to statehood.</p>"}</details><details><summary>Negotiations & peace agreements · ${r.diplomacy.length}</summary>${cards(r.diplomacy) || "<p>No diplomatic developments recorded.</p>"}</details><details><summary>Other diplomatic crises · ${r.crises.length}</summary>${cards(r.crises) || "<p>No active crises.</p>"}</details></div>`;
 }
 function showTurnEvent() {
   const { report, eventIndex } = pendingTurn;
