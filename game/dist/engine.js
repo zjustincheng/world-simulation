@@ -1140,6 +1140,36 @@ function capture(
         queue.push(j);
       }
   }
+  // A push through a narrow corridor can cut off a pocket of the defender.
+  // Absorb pockets fully surrounded by this victor so wars do not leave
+  // nonsensical enclaves behind. Keep the capital-connected region and any
+  // fragments that still touch neutral land, water, or another country.
+  const capital = s.nations[loser].capital;
+  const visited = new Set();
+  for (let start = 0; start < s.owner.length; start++) {
+    if (s.owner[start] !== loser || visited.has(start)) continue;
+    const component = [start];
+    visited.add(start);
+    let enclosed = true,
+      touchesMapEdge = false;
+    for (let cursor = 0; cursor < component.length; cursor++) {
+      const i = component[cursor];
+      if (i % W === 0 || i % W === W - 1 || i < W || i >= W * (H - 1))
+        touchesMapEdge = true;
+      for (const j of neighbors(i)) {
+        if (s.owner[j] === loser && !visited.has(j)) {
+          visited.add(j);
+          component.push(j);
+        } else if (s.owner[j] !== loser && s.owner[j] !== winner) {
+          enclosed = false;
+        }
+      }
+    }
+    if (enclosed && !touchesMapEdge && !component.includes(capital)) {
+      for (const i of component) s.owner[i] = winner;
+      taken += component.length;
+    }
+  }
   if (taken) {
     const terrain = s.terrain[cell];
     const campaignLoss = (battleLosses[loser] || 0) + taken;

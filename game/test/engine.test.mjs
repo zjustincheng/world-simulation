@@ -94,6 +94,50 @@ test("war moves borders, alliances stop wars, peace and annexation work", () => 
   validate(s);
 });
 
+test("campaigns do not leave detached territory pockets surrounded by one victor", () => {
+  const s = createWorld("coherent-fronts", 2, "pangaea");
+  s.settings.expansion = false;
+  assert.equal(declareWar(s, 0, 1, { reason: "a contested frontier" }), true);
+  for (let year = 0; year < 120; year++) {
+    tick(s);
+    for (const nation of s.nations) {
+      const visited = new Set();
+      for (let start = 0; start < s.owner.length; start++) {
+        if (s.owner[start] !== nation.id || visited.has(start)) continue;
+        const component = [start],
+          borderOwners = new Set();
+        visited.add(start);
+        let touchesEdge = false;
+        for (let cursor = 0; cursor < component.length; cursor++) {
+          const cell = component[cursor];
+          if (
+            cell % W === 0 ||
+            cell % W === W - 1 ||
+            cell < W ||
+            cell >= W * (H - 1)
+          )
+            touchesEdge = true;
+          for (const next of neighbors(cell)) {
+            if (s.owner[next] === nation.id && !visited.has(next)) {
+              visited.add(next);
+              component.push(next);
+            } else if (s.owner[next] !== nation.id) {
+              borderOwners.add(s.owner[next]);
+            }
+          }
+        }
+        if (component.includes(nation.capital) || touchesEdge) continue;
+        assert.ok(
+          borderOwners.size !== 1 ||
+            ![...borderOwners].every((owner) => owner >= 0),
+          `${nation.name} has an isolated pocket enclosed by nation ${[...borderOwners][0]}`,
+        );
+      }
+    }
+  }
+  validate(s);
+});
+
 test("alliance pacts form multi-country blocs and player wars break the linking pacts", () => {
   const s = createWorld("three-state-pact", 3, "arena");
   ally(s, 0, 1);
