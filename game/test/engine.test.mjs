@@ -144,6 +144,19 @@ test("revolutions produce a connected new country and collapse frees territory",
   validate(s);
 });
 
+test("old extinct nation records do not prevent new revolts", () => {
+  const s = createWorld("revolt-history", 2, "arena");
+  // Model a save that has accumulated many historical countries while the
+  // original nation still controls enough land to support another revolt.
+  while (s.nations.length < 64) {
+    const id = s.nations.length;
+    s.nations.push({ ...structuredClone(s.nations[0]), id, dead: s.year });
+  }
+  assert.equal(rebel(s, 0), true);
+  assert.equal(s.nations.length, 65);
+  validate(s);
+});
+
 test("revolts wait for the active campaign to settle", () => {
   const s = createWorld("revolt-during-war", 2, "arena");
   declareWar(s, 0, 1, { reason: "a border crisis" });

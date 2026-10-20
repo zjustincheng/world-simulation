@@ -12,7 +12,10 @@ export const W = 160,
   H = 100,
   WATER = -1,
   NEUTRAL = -2,
-  MAX_NATIONS = 64;
+  // Nation records are retained for history, so keep this well above the
+  // number of countries that can exist on the map at once. Otherwise old,
+  // extinct countries would eventually prevent any new revolts.
+  MAX_NATIONS = 512;
 export const SEASONS = ["Spring", "Summer", "Autumn", "Winter"];
 export const TECH_PROGRESS_REQUIRED = 48;
 export const GOVERNMENTS = [
