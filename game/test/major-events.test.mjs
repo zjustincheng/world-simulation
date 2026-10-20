@@ -82,21 +82,21 @@ test("settlement summaries and expansion milestones are reachable without year c
   assert.equal(advanceToMajorEvent(expanding).milestone, "expansion");
 });
 
-test("world roundup includes simultaneous conflicts and alliances across countries", () => {
+test("war chapters resolve one complete campaign before another can begin", () => {
   const s = createWorld("world-roundup", 4, "arena");
   s.settings.wars = false;
   s.settings.revolts = false;
   ally(s, 0, 2);
   declareWar(s, 0, 1, { reason: "a western border dispute" });
-  declareWar(s, 2, 3, { reason: "an eastern independence claim" });
+  assert.equal(
+    declareWar(s, 2, 3, { reason: "an eastern independence claim" }),
+    false,
+  );
   const owners = [...s.owner];
   const report = advanceToMajorEvent(s);
-  assert.ok(report.roundup.wars.length >= 2);
+  assert.equal(report.roundup.wars.length, 1);
   assert.ok(report.roundup.wars.every((w) => w.text.startsWith("War ended")));
   assert.ok(report.roundup.wars.some((w) => w.text.includes("western border")));
-  assert.ok(
-    report.roundup.wars.some((w) => w.text.includes("eastern independence")),
-  );
   assert.ok(
     report.roundup.alliances.some(
       (a) =>

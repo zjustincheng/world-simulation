@@ -369,16 +369,12 @@ export function advanceToMajorEvent(s) {
       const resolved = (s.warHistory || []).filter(
         (r) => r.ended !== null && r.ended > startYear,
       );
-      if (
-        resolved.length &&
-        (!s.wars.length ||
-          resolved.length >= 2 ||
-          before.filter(Boolean).length <= 3)
-      ) {
+      if (resolved.length) {
         milestone = "development";
         break;
       }
       if (
+        !s.wars.length &&
         important.some((e) => e.type === "fall" || e.type === "birth") &&
         changed >= 60
       ) {

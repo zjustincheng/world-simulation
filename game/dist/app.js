@@ -450,7 +450,7 @@ function renderDetail(force = false) {
     .map((m) => `<option value="${m.id}">${esc(m.name)}</option>`)
     .join(
       "",
-    )}</select><div class="actions"><button data-action="war" class="danger-outline" ${!alive ? "disabled" : ""}>⚔ Declare war</button><button data-action="ally" ${!alive ? "disabled" : ""}>◇ Toggle alliance</button><button data-action="annex" ${!alive ? "disabled" : ""}>▣ Annex target</button><button data-action="collapse" class="danger-outline" ${!alive ? "disabled" : ""}>× Collapse</button></div><details id="edit-nation" class="edit-toggle" ${open ? "open" : ""}><summary>Edit nation</summary><div class="edit-fields"><label>Name<input type="text" id="nation-name" maxlength="35" value="${esc(n.name)}"></label><label>Color<input type="color" id="nation-color" value="${n.color}"></label><label>Government<select id="nation-government">${governmentOptions}</select></label><label>Religion<select id="nation-religion">${religionOptions}</select></label><label>Combat efficiency <input id="efficiency" type="range" min="15" max="150" value="${Math.round(n.efficiency)}"></label><label>Stability <input id="stability" type="range" min="5" max="100" value="${Math.round(n.stability)}"></label><button data-action="regional-name">✧ Name from capital</button><button data-action="apply">Apply changes</button></div></details>`;
+    )}</select><div class="actions"><button data-action="war" class="danger-outline" ${!alive || world.wars.length ? "disabled" : ""} title="${world.wars.length ? "Resolve the current war before opening another." : "Declare war"}">${world.wars.length ? "⏳ War in progress" : "⚔ Declare war"}</button><button data-action="ally" ${!alive ? "disabled" : ""}>◇ Toggle alliance</button><button data-action="annex" ${!alive ? "disabled" : ""}>▣ Annex target</button><button data-action="collapse" class="danger-outline" ${!alive ? "disabled" : ""}>× Collapse</button></div><details id="edit-nation" class="edit-toggle" ${open ? "open" : ""}><summary>Edit nation</summary><div class="edit-fields"><label>Name<input type="text" id="nation-name" maxlength="35" value="${esc(n.name)}"></label><label>Color<input type="color" id="nation-color" value="${n.color}"></label><label>Government<select id="nation-government">${governmentOptions}</select></label><label>Religion<select id="nation-religion">${religionOptions}</select></label><label>Combat efficiency <input id="efficiency" type="range" min="15" max="150" value="${Math.round(n.efficiency)}"></label><label>Stability <input id="stability" type="range" min="5" max="100" value="${Math.round(n.stability)}"></label><button data-action="regional-name">✧ Name from capital</button><button data-action="apply">Apply changes</button></div></details>`;
   if (rival && [...$("#rival").options].some((o) => o.value === rival))
     $("#rival").value = rival;
 }
@@ -601,7 +601,11 @@ $("#nation-detail").onclick = (e) => {
     return;
   }
   if (action === "war" && !declareWar(world, selected, target))
-    toast("These nations are already at war.");
+    toast(
+      world.wars.length
+        ? "The ongoing war must be resolved before another can begin."
+        : "These nations are already at war.",
+    );
   if (action === "ally") ally(world, selected, target);
   if (action === "annex") {
     annex(world, selected, target);

@@ -768,14 +768,15 @@ export function reconcile(s) {
 }
 export const hasTruce = (s, a, b) =>
   (s.truces || []).some((p) => related([p], a, b) && p[2] > s.year);
-export function declareWar(
-  s,
-  a,
-  b,
-  { force = true, reason = null, cascade = true } = {},
-) {
+export function declareWar(s, a, b, { force = true, reason = null } = {}) {
   const counts = stats(s);
-  if (a === b || !counts[a] || !counts[b] || related(s.wars, a, b))
+  if (
+    a === b ||
+    !counts[a] ||
+    !counts[b] ||
+    s.wars.length > 0 ||
+    related(s.wars, a, b)
+  )
     return false;
   const pactPath = alliancePath(s, a, b);
   if (!force && (hasTruce(s, a, b) || pactPath.length || !reason)) return false;
@@ -832,27 +833,6 @@ export function declareWar(
     `${s.nations[a].name} declares war on ${s.nations[b].name}. The stated cause is that ${cause}.`,
     "war",
   );
-  if (cascade && s.settings.alliances) {
-    const { borders } = frontiers(s);
-    for (const [allyOf, opposing] of [
-      [a, b],
-      [b, a],
-    ])
-      for (const member of allianceMembers(s, allyOf)) {
-        const key = pair(member, opposing).join(",");
-        if (
-          counts[member] &&
-          (borders.get(key)?.length || 0) > 0 &&
-          !related(s.wars, member, opposing) &&
-          !allied(s, member, opposing)
-        )
-          declareWar(s, member, opposing, {
-            force: true,
-            cascade: false,
-            reason: `${s.nations[member].name} honors its alliance with ${s.nations[allyOf].name} and enters the war against ${s.nations[opposing].name}`,
-          });
-      }
-  }
   return true;
 }
 export function peace(
@@ -942,6 +922,7 @@ export function collapse(s, a) {
   return true;
 }
 export function rebel(s, a) {
+  if (s.wars.length) return false;
   const cells = s.owner.map((n, i) => (n === a ? i : -1)).filter((i) => i >= 0);
   if (cells.length < 30 || s.nations.length >= MAX_NATIONS) return false;
   // Start away from the capital, then take a connected region without wrapping map edges.
@@ -1359,6 +1340,7 @@ export function tick(s) {
     research(s, n, after[id]);
     if (
       s.settings.revolts &&
+      !s.wars.length &&
       s.nations.length < MAX_NATIONS &&
       after[id] > 150 &&
       n.stability < 45 &&

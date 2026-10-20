@@ -63,7 +63,7 @@ test("four centuries of conflict conserve land and keep valid nations and relati
   }
   assert.equal(s.year, 401);
   assert.ok(s.warHistory.length > 0);
-  assert.ok(mostConcurrentWars > 1);
+  assert.equal(mostConcurrentWars, 1);
   assert.ok(new Set(s.warHistory.flatMap((war) => [war.a, war.b])).size >= 8);
 });
 
@@ -108,15 +108,14 @@ test("alliance pacts form multi-country blocs and player wars break the linking 
   validate(s);
 });
 
-test("a threatened alliance member can bring neighboring allies into a war", () => {
+test("an alliance supports its member without opening a second war", () => {
   const s = createWorld("alliance-cascade", 3, "arena");
   ally(s, 1, 2);
   assert.equal(declareWar(s, 0, 1, { reason: "a contested frontier" }), true);
   assert.ok(s.wars.some((war) => war[0] === 0 && war[1] === 1));
-  assert.ok(s.wars.some((war) => war[0] === 0 && war[1] === 2));
-  assert.ok(
-    s.warHistory.some((war) => war.reason.includes("honors its alliance")),
-  );
+  assert.equal(s.wars.length, 1);
+  assert.ok(allianceMembers(s, 1).includes(2));
+  assert.equal(declareWar(s, 2, 0), false);
   validate(s);
 });
 

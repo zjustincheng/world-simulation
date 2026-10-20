@@ -75,7 +75,9 @@ export function diplomacyTick(s, borders, coasts, sizes) {
         ),
     );
     const pact = s.relations[keyOf(a, b)];
-    if (!commonThreat && pact && s.year - pact.since >= 20) ally(s, a, b);
+    const memberAtWar = s.wars.some((p) => p.includes(a) || p.includes(b));
+    if (!commonThreat && !memberAtWar && pact && s.year - pact.since >= 20)
+      ally(s, a, b);
   }
   const candidates = new Set(borders.keys());
   // Historical claims can concern nearby islands, but never unreachable overseas rivals.
@@ -178,10 +180,11 @@ export function diplomacyTick(s, borders, coasts, sizes) {
       r.since = s.year;
       r.stage = 0;
     }
+    // Keep one campaign in focus until its settlement; other disputes wait.
+    if (s.wars.length) continue;
     const attacker = s.nations[r.initiator],
       target = r.initiator === a ? b : a;
-    const activeFronts = s.wars.filter((p) => p.includes(attacker.id)).length;
-    if (activeFronts >= 2 || attacker.wealth < 60 || attacker.stability < 45) {
+    if (s.wars.length || attacker.wealth < 60 || attacker.stability < 45) {
       r.tension = Math.max(0, r.tension - 5);
       continue;
     }
