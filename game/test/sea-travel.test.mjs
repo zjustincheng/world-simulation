@@ -162,9 +162,15 @@ test("forced naval wars move territory across Greenland–Iceland, Iceland–UK,
     validate(s);
   }
 });
-test("every non-edge island in every map has a reachable next shore", async () => {
+test("every non-edge island in every map preset has a reachable next shore", async () => {
   const { REAL_MAPS } = await import("../dist/real-maps.js");
-  for (const preset of ["islands", ...Object.keys(REAL_MAPS)]) {
+  for (const preset of [
+    "continents",
+    "pangaea",
+    "islands",
+    "arena",
+    ...Object.keys(REAL_MAPS),
+  ]) {
     const s = createWorld(`island-audit-${preset}`, 0, preset, "empty"),
       seen = new Set(),
       components = [];
@@ -180,6 +186,7 @@ test("every non-edge island in every map has a reachable next shore", async () =
             }
         components.push(cells);
       }
+    if (components.length < 2) continue;
     const nationIds = components.map((cells) => {
       const id = spawnNation(s, cells[0], { radius: 0, quiet: true });
       for (const tile of cells) s.owner[tile] = id;
