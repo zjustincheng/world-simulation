@@ -169,9 +169,19 @@ test("an alliance supports its member without opening a second war", () => {
 
 test("revolutions produce a connected new country and collapse frees territory", () => {
   const s = createWorld("rebellion", 2, "arena");
+  s.nations[0].tech = {
+    age: 2,
+    progress: 17.5,
+    unlocked: ["three-field", "stirrups", "field-drill"],
+  };
+  const inheritedTech = structuredClone(s.nations[0].tech);
   assert.equal(rebel(s, 0), true);
   const id = s.nations.length - 1,
     cells = s.owner.map((n, i) => (n === id ? i : -1)).filter((i) => i >= 0);
+  assert.deepEqual(s.nations[id].tech, inheritedTech);
+  assert.notEqual(s.nations[id].tech, s.nations[0].tech);
+  s.nations[id].tech.progress++;
+  assert.equal(s.nations[0].tech.progress, inheritedTech.progress);
   const visited = new Set([cells[0]]),
     queue = [cells[0]];
   for (let h = 0; h < queue.length; h++)

@@ -996,6 +996,9 @@ export function rebel(s, a) {
       generateNationName(s, center, { revolution: true }),
     ),
   );
+  s.nations[id].tech = structuredClone(
+    old.tech || { age: 0, progress: 0, unlocked: [] },
+  );
   const queue = [center],
     seen = new Set(queue);
   let head = 0,
