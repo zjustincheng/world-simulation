@@ -94,6 +94,31 @@ test("war moves borders, alliances stop wars, peace and annexation work", () => 
   validate(s);
 });
 
+test("peace terms absorb a conquered nation left with only a few tiles", () => {
+  const s = createWorld("tiny-peace-remnant", 2, "arena");
+  assert.equal(
+    declareWar(s, 0, 1, { reason: "a decisive territorial campaign" }),
+    true,
+  );
+  const remnants = [
+    s.nations[1].capital,
+    ...neighbors(s.nations[1].capital).filter((cell) => s.owner[cell] === 1),
+  ].slice(0, 3);
+  assert.equal(remnants.length, 3);
+  s.owner = s.owner.map((owner) => (owner === 1 ? 0 : owner));
+  for (const cell of remnants) s.owner[cell] = 1;
+  s.nations[1].capital = remnants[0];
+  s.warStats["0,1"] = [100, 0];
+  assert.equal(peace(s, 0, 1), 1);
+  assert.equal(stats(s)[1], 0);
+  assert.equal(s.nations[1].dead, s.year);
+  assert.match(s.warHistory[0].outcome, /accepts full annexation/);
+  assert.ok(
+    s.events.some((event) => event.text.includes("loses its independence")),
+  );
+  validate(s);
+});
+
 test("campaigns do not leave detached territory pockets surrounded by one victor", () => {
   const s = createWorld("coherent-fronts", 2, "pangaea");
   s.settings.expansion = false;

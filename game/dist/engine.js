@@ -869,15 +869,31 @@ export function peace(
     s.truces.push([first, second, s.year + 15]);
     const gains = s.warStats?.[`${first},${second}`] || [0, 0];
     const net = gains[0] - gains[1];
-    const outcome = net
+    let outcome = net
       ? `${s.nations[net > 0 ? first : second].name} retains a net gain of ${Math.abs(net)} tiles from the fighting`
       : "neither side retains a net territorial gain from the fighting";
+    let annexedRemnant = null;
     if (net) {
-      const defeated = s.nations[net > 0 ? second : first];
+      const victor = net > 0 ? first : second,
+        defeatedId = net > 0 ? second : first,
+        defeated = s.nations[defeatedId];
       defeated.stability = Math.max(
         5,
         defeated.stability - Math.min(30, 15 + Math.floor(Math.abs(net) * 0.2)),
       );
+      // Small disconnected border fragments are ceded in the peace, rather
+      // than surviving as stray pixels after the main front has settled.
+      annexTinyBorderFragments(s, victor, defeatedId);
+      const remaining = stats(s)[defeatedId],
+        victoryTerritory = stats(s)[victor],
+        annexThreshold = Math.min(
+          16,
+          Math.max(4, Math.ceil(victoryTerritory * 0.01)),
+        );
+      if (remaining > 0 && remaining <= annexThreshold) {
+        annexedRemnant = { victor, defeated: defeatedId };
+        outcome += `; ${defeated.name} accepts full annexation by ${s.nations[victor].name}`;
+      }
     }
     const record = (s.warHistory || []).findLast(
       (r) => r.ended === null && r.a === first && r.b === second,
@@ -890,13 +906,36 @@ export function peace(
     s.relations[`${first},${second}`].napUntil = s.year + 30;
     log(
       s,
-      `The settlement of year ${s.year}. ${reason}. ${outcome}. Both governments recognize the new frontier and renounce their claims; a 15-year truce begins.`,
+      `The settlement of year ${s.year}. ${reason}. ${outcome}. ${annexedRemnant ? "The defeated government joins the victor and loses its independence." : "Both governments recognize the new frontier and renounce their claims; a 15-year truce begins."}`,
       "peace",
     );
     if (s.warStats) delete s.warStats[`${first},${second}`];
+    if (annexedRemnant)
+      annex(s, annexedRemnant.victor, annexedRemnant.defeated);
   }
   return ended.length;
 }
+
+function annexTinyBorderFragments(s, victor, defeated) {
+  const visited = new Set(),
+    capital = s.nations[defeated].capital;
+  for (let start = 0; start < s.owner.length; start++) {
+    if (s.owner[start] !== defeated || visited.has(start)) continue;
+    const component = [start];
+    visited.add(start);
+    let touchesVictor = false;
+    for (let head = 0; head < component.length; head++)
+      for (const next of neighbors(component[head])) {
+        if (s.owner[next] === defeated && !visited.has(next)) {
+          visited.add(next);
+          component.push(next);
+        } else if (s.owner[next] === victor) touchesVictor = true;
+      }
+    if (component.length <= 3 && touchesVictor && !component.includes(capital))
+      for (const cell of component) s.owner[cell] = victor;
+  }
+}
+
 export function ally(s, a, b) {
   const counts = stats(s);
   if (a === b || !counts[a] || !counts[b]) return false;
