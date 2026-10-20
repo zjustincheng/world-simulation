@@ -884,6 +884,7 @@ export function peace(
       record.outcome = outcome;
     }
     settleRelation(s, first, second);
+    s.relations[`${first},${second}`].napUntil = s.year + 30;
     log(
       s,
       `The settlement of year ${s.year}. ${reason}. ${outcome}. Both governments recognize the new frontier and renounce their claims; a 15-year truce begins.`,
@@ -1544,6 +1545,7 @@ export function validate(input) {
       !integer(r.since) ||
       r.since < 1 ||
       r.since > s.year ||
+      (r.napUntil !== undefined && (!integer(r.napUntil) || r.napUntil < 0)) ||
       typeof r.reason !== "string" ||
       r.reason.length > 800 ||
       ![r.claims, r.baseline].every(

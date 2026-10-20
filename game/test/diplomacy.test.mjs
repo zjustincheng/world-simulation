@@ -9,6 +9,7 @@ import {
   ally,
   hasTruce,
   rebel,
+  allianceMembers,
 } from "../dist/engine.js";
 import { relation } from "../dist/diplomacy.js";
 function world() {
@@ -62,6 +63,35 @@ test("negotiation can settle a grievance without fighting and preserves the pact
   assert.deepEqual(s.relations["0,1"].claims, [0, 0]);
   assert.ok(
     s.events.some((e) => e.text.startsWith("A negotiated settlement.")),
+  );
+  const settlements = s.events.filter((e) =>
+    e.text.startsWith("A negotiated settlement."),
+  ).length;
+  for (let i = 0; i < 20; i++) tick(s);
+  assert.equal(hasTruce(s, 0, 1), false);
+  assert.equal(
+    s.events.filter((e) => e.text.startsWith("A negotiated settlement."))
+      .length,
+    settlements,
+  );
+  assert.ok(s.relations["0,1"].napUntil > s.year);
+  validate(s);
+});
+
+test("neighboring states form a balance-of-power coalition against a hegemon", () => {
+  const s = createWorld("balance-of-power", 5, "arena");
+  s.settings.expansion = false;
+  s.settings.revolts = false;
+  s.owner = s.owner.map((owner) => (owner < 0 ? owner : 0));
+  for (const n of s.nations.slice(1)) s.owner[n.capital] = n.id;
+  tick(s);
+  const coalition = allianceMembers(s, 1);
+  assert.ok(coalition.length >= 1);
+  assert.ok(!coalition.includes(0));
+  assert.ok(
+    s.events.some((event) =>
+      event.text.startsWith("A balance-of-power coalition"),
+    ),
   );
   validate(s);
 });

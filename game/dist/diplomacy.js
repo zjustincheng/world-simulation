@@ -10,6 +10,28 @@ import {
   allied,
 } from "./engine.js";
 const keyOf = (a, b) => [Math.min(a, b), Math.max(a, b)].join(",");
+function balanceOfPower(s, borders, sizes) {
+  if (!s.settings.alliances) return null;
+  const living = sizes
+    .map((size, id) => ({ id, size }))
+    .filter((country) => country.size > 0)
+    .sort((a, b) => b.size - a.size);
+  if (living.length < 4) return null;
+  const [leader, runnerUp] = living;
+  const total = living.reduce((sum, country) => sum + country.size, 0);
+  if (
+    leader.size / total < 0.28 ||
+    leader.size / Math.max(1, runnerUp.size) < 1.65
+  )
+    return null;
+  const neighbors = new Set();
+  for (const key of borders.keys()) {
+    const [a, b] = key.split(",").map(Number);
+    if (a === leader.id) neighbors.add(b);
+    if (b === leader.id) neighbors.add(a);
+  }
+  return neighbors.size >= 2 ? { leader: leader.id, neighbors } : null;
+}
 const militaryIndex = (s, id, size) => {
   const n = s.nations[id];
   return (
@@ -32,6 +54,7 @@ export function relation(s, a, b, sizes = stats(s)) {
     stage: 0,
     claims: [0, 0],
     baseline: [sizes[first], sizes[second]],
+    napUntil: 0,
     strength: [
       militaryIndex(s, first, sizes[first]),
       militaryIndex(s, second, sizes[second]),
@@ -62,6 +85,7 @@ export function settleRelation(s, a, b) {
 }
 export function diplomacyTick(s, borders, coasts, sizes) {
   s.relations ||= {};
+  const balance = balanceOfPower(s, borders, sizes);
   // Defensive compacts should outlast the crisis that created them, not freeze
   // the map forever. Let them lapse after a generation without a shared enemy.
   for (const [a, b] of [...s.alliances]) {
@@ -76,8 +100,30 @@ export function diplomacyTick(s, borders, coasts, sizes) {
     );
     const pact = s.relations[keyOf(a, b)];
     const memberAtWar = s.wars.some((p) => p.includes(a) || p.includes(b));
-    if (!commonThreat && !memberAtWar && pact && s.year - pact.since >= 20)
+    const commonHegemonicThreat =
+      balance?.neighbors.has(a) && balance.neighbors.has(b);
+    if (
+      !commonThreat &&
+      !commonHegemonicThreat &&
+      !memberAtWar &&
+      pact &&
+      s.year - pact.since >= 20
+    )
       ally(s, a, b);
+  }
+  if (balance) {
+    const members = [...balance.neighbors].sort((a, b) => a - b);
+    const anchor = members[0];
+    const formed = [];
+    for (const id of members.slice(1))
+      if (!allied(s, anchor, id) && !related(s.wars, anchor, id))
+        if (ally(s, anchor, id)) formed.push(id);
+    if (formed.length)
+      log(
+        s,
+        `A balance-of-power coalition takes shape. ${members.map((id) => s.nations[id].name).join(", ")} coordinate to contain the rapid rise of ${s.nations[balance.leader].name}.`,
+        "peace",
+      );
   }
   const candidates = new Set(borders.keys());
   // Historical claims can concern nearby islands, but never unreachable overseas rivals.
@@ -111,6 +157,7 @@ export function diplomacyTick(s, borders, coasts, sizes) {
     const A = s.nations[a],
       B = s.nations[b];
     if (!r.reason) {
+      if (r.napUntil > s.year) continue;
       const losses = Math.max(...r.claims);
       if (losses >= 8) {
         r.initiator = r.claims[0] >= r.claims[1] ? a : b;
@@ -232,6 +279,7 @@ export function diplomacyTick(s, borders, coasts, sizes) {
       );
       settleRelation(s, a, b);
       s.truces.push([a, b, s.year + 15]);
+      relation(s, a, b).napUntil = s.year + 80;
       continue;
     }
     if (r.stage === 2 && r.tension >= 76) {
