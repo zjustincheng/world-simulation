@@ -8,6 +8,7 @@ import {
   ally,
   log,
   allied,
+  allianceMembers,
 } from "./engine.js";
 const keyOf = (a, b) => [Math.min(a, b), Math.max(a, b)].join(",");
 function balanceOfPower(s, borders, sizes) {
@@ -41,6 +42,11 @@ const militaryIndex = (s, id, size) => {
     (1 + (n.tech?.unlocked?.length || 0) * 0.055)
   );
 };
+const coalitionIndex = (s, id, sizes) =>
+  [id, ...allianceMembers(s, id)].reduce(
+    (sum, member) => sum + militaryIndex(s, member, sizes[member]) * 0.78,
+    0,
+  );
 export function relation(s, a, b, sizes = stats(s)) {
   s.relations ||= {};
   const [first, second] = [Math.min(a, b), Math.max(a, b)];
@@ -124,6 +130,23 @@ export function diplomacyTick(s, borders, coasts, sizes) {
         `A balance-of-power coalition takes shape. ${members.map((id) => s.nations[id].name).join(", ")} coordinate to contain the rapid rise of ${s.nations[balance.leader].name}.`,
         "peace",
       );
+    const challenger = [...balance.neighbors].sort(
+      (a, b) => s.nations[b].aggression - s.nations[a].aggression,
+    )[0];
+    if (
+      challenger !== undefined &&
+      !related(s.wars, challenger, balance.leader) &&
+      !allied(s, challenger, balance.leader) &&
+      !hasTruce(s, challenger, balance.leader)
+    ) {
+      const r = relation(s, challenger, balance.leader, sizes);
+      if (!r.reason && r.napUntil <= s.year) {
+        r.initiator = challenger;
+        r.since = s.year;
+        r.stage = 0;
+        r.reason = `${s.nations[challenger].name} joins its neighbors in demanding limits on ${s.nations[balance.leader].name}'s growing regional dominance`;
+      }
+    }
   }
   const candidates = new Set(borders.keys());
   // Historical claims can concern nearby islands, but never unreachable overseas rivals.
@@ -265,8 +288,8 @@ export function diplomacyTick(s, borders, coasts, sizes) {
       );
     }
     const ratio =
-      ((sizes[attacker.id] + 40) * attacker.efficiency) /
-      ((sizes[target] + 40) * s.nations[target].efficiency);
+      coalitionIndex(s, attacker.id, sizes) /
+      Math.max(1, coalitionIndex(s, target, sizes));
     if (
       r.stage >= 2 &&
       r.tension >= 60 &&

@@ -1354,7 +1354,11 @@ export function tick(s) {
       Math.min(
         100,
         n.stability +
-          (fronts[id] ? -0.25 : 0.6 + governmentBonus(n, "stability")),
+          (fronts[id]
+            ? -0.45
+            : 0.2 +
+              governmentBonus(n, "stability") +
+              (68 - n.stability) * 0.04),
       ),
     );
     n.population = after[id] * 300;
@@ -1365,8 +1369,8 @@ export function tick(s) {
       !s.wars.length &&
       s.nations.length < MAX_NATIONS &&
       after[id] > 150 &&
-      n.stability < 58 &&
-      random(s) < (n.stability < 28 ? 0.25 : n.stability < 45 ? 0.16 : 0.07)
+      n.stability < 80 &&
+      random(s) < (n.stability < 45 ? 0.2 : n.stability < 58 ? 0.08 : 0.006)
     )
       rebel(s, id);
   }
