@@ -120,6 +120,16 @@ const diplomacyPalette = [
   "#a6bb62",
   "#ce986d",
 ];
+const diplomacyTitles = [
+  "Concord",
+  "Grand Compact",
+  "Iron Pact",
+  "Defensive League",
+  "Shield Confederacy",
+  "Continental Union",
+  "Crown Alliance",
+  "Commonwealth",
+];
 function buildDiplomacyBlocs() {
   const remaining = new Set(
     world.nations.filter((n) => counts[n.id] > 0).map((n) => n.id),
@@ -134,9 +144,14 @@ function buildDiplomacyBlocs() {
     members.forEach((id) => remaining.delete(id));
     if (members.length < 2) continue;
     const color = diplomacyPalette[diplomacyBlocs.length % diplomacyPalette.length];
+    const leadingNation = members.reduce((best, id) =>
+      productive[id] > productive[best] ? id : best,
+    );
+    const region = capitalRegion(world, world.nations[leadingNation].capital);
     members.forEach((id) => (diplomacyColors[id] = color));
     diplomacyBlocs.push({
       color,
+      name: `The ${region.adjective} ${diplomacyTitles[first % diplomacyTitles.length]}`,
       members: members.map((id) => world.nations[id].name),
     });
   }
@@ -149,7 +164,7 @@ function updateMapKey() {
     ? diplomacyBlocs
         .map(
           (bloc) =>
-            `<span><i style="background:${bloc.color}"></i>${esc(bloc.members.join(" · "))}</span>`,
+            `<span><i style="background:${bloc.color}"></i><b>${esc(bloc.name)}</b> · ${esc(bloc.members.join(" · "))}</span>`,
         )
         .join("") +
       '<span><i style="background:#62798d"></i>Independent</span><span><i style="background:#637063"></i>Unclaimed land</span><span><i class="battle-dot"></i>War front</span>'
