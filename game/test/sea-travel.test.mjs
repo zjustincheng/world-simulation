@@ -110,6 +110,58 @@ test("Greenland can reach and colonize Iceland across the Arctic route", () => {
   assert.ok([...iceland].some((cell) => s.owner[cell] === 0));
   validate(s);
 });
+test("forced naval wars move territory across Greenland–Iceland, Iceland–UK, and UK–mainland routes", () => {
+  const base = createWorld("war-routes", 0, "earth", "empty"),
+    nearest = (longitude, latitude) =>
+      base.owner.reduce((best, owner, i) => {
+        if (owner === WATER) return best;
+        const point = capitalCoordinates(base, i),
+          distance =
+            (point.longitude - longitude) ** 2 +
+            (point.latitude - latitude) ** 2;
+        return distance < best.distance ? { cell: i, distance } : best;
+      }, { cell: -1, distance: Infinity }).cell,
+    component = (start) => {
+      const queue = [start], cells = new Set(queue);
+      for (let head = 0; head < queue.length; head++)
+        for (const next of neighbors(queue[head]))
+          if (base.owner[next] !== WATER && !cells.has(next)) {
+            cells.add(next);
+            queue.push(next);
+          }
+      return cells;
+    },
+    locations = [
+      ["Greenland", -42, 72],
+      ["Iceland", -19, 65],
+      ["UK", -3, 55],
+      ["mainland", 2, 51],
+    ],
+    lands = locations.map(([, lon, lat]) => component(nearest(lon, lat)));
+  for (const [left, right] of [[0, 1], [1, 2], [2, 3]]) {
+    const s = createWorld(`forced-sea-war-${left}-${right}`, 0, "earth", "empty");
+    const ids = [];
+    for (const index of [left, right]) {
+      const id = spawnNation(s, [...lands[index]][0], { radius: 0 });
+      ids.push(id);
+      for (const tile of lands[index]) s.owner[tile] = id;
+    }
+    s.settings.expansion = false;
+    s.settings.wars = false;
+    s.settings.alliances = false;
+    s.settings.revolts = false;
+    assert.equal(declareWar(s, ids[0], ids[1]), true);
+    for (let year = 0; year < 12 && s.wars.length; year++) tick(s);
+    assert.ok(
+      s.owner.some((owner) => owner === ids[0] || owner === ids[1]) &&
+        [...lands[left], ...lands[right]].some((tile) =>
+          s.owner[tile] !== (lands[left].has(tile) ? ids[0] : ids[1]),
+        ),
+      `${locations[left][0]} and ${locations[right][0]} should exchange territory`,
+    );
+    validate(s);
+  }
+});
 test("forced war cannot teleport an invasion across a wide ocean", () => {
   const s = islandWorld([[10], [100]]);
   spawnNation(s, cell(100), { radius: 0 });

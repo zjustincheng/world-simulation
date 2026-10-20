@@ -1163,6 +1163,8 @@ export function paint(s, cell, radius, mode, nation = null) {
 }
 export const MAX_SEA_CROSSING = 4;
 const ARCTIC_SEA_CROSSING = 6;
+// Armies can sustain a longer crossing than settlers or routine diplomacy can.
+const WAR_SEA_CROSSING = 16;
 function seaRange(s, cell) {
   const coordinates = capitalCoordinates(s, cell),
     latitude = coordinates?.latitude ?? 90 - (((Math.floor(cell / W) + 0.5) / H) * 180);
@@ -1176,6 +1178,7 @@ export function nearbySeaLandings(
   target = NEUTRAL,
   origins = null,
   allReachable = false,
+  rangeOverride = null,
 ) {
   const coast =
     origins ||
@@ -1185,7 +1188,7 @@ export function nearbySeaLandings(
     results = new Set();
   for (const origin of coast) {
     if (s.owner[origin] !== nation) continue;
-    const range = seaRange(s, origin);
+    const range = rangeOverride ?? seaRange(s, origin);
     for (const cell of neighbors(origin)) {
       const key = `${cell}:${range}`;
       if (s.owner[cell] === WATER && !seen.has(key)) {
@@ -1536,7 +1539,11 @@ export function tick(s) {
           campaignSides,
         );
       }
-    } else if (s.year % 4 === 0) {
+    }
+    // Naval operations run on their own schedule, even when the campaign also
+    // has active land fronts. Otherwise a single land border suppresses every
+    // overseas ally's attacks for the whole war.
+    if (s.year % 4 === 0) {
       const sideAWins = random(s) < pa / (pa + pb),
         attackers = sideAWins ? sideA : sideB,
         defenders = sideAWins ? sideB : sideA,
@@ -1551,6 +1558,7 @@ export function tick(s) {
                 defender,
                 coasts[attacker],
                 true,
+                WAR_SEA_CROSSING,
               );
               if (landings.length) invasions.push({ attacker, defender, landings });
             }
