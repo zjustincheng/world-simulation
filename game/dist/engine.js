@@ -1568,41 +1568,49 @@ export function tick(s) {
     // has active land fronts. Otherwise a single land border suppresses every
     // overseas ally's attacks for the whole war.
     if (s.year % 4 === 0) {
-      const sideAWins = random(s) < pa / (pa + pb),
-        attackers = sideAWins ? sideA : sideB,
-        defenders = sideAWins ? sideB : sideA,
-        invasions = [];
-      for (const attacker of attackers)
-        if (s.nations[attacker].wealth > 30 && coasts[attacker].length)
-          for (const defender of defenders)
-            if (coasts[defender].length) {
-              const landings = nearbySeaLandings(
-                s,
-                attacker,
-                defender,
-                coasts[attacker],
-                true,
-                WAR_SEA_CROSSING,
-              );
-              if (landings.length) invasions.push({ attacker, defender, landings });
-            }
-      if (invasions.length) {
-        const invasion = pick(s, invasions),
-          { attacker, defender } = invasion;
-        capture(
-          s,
-          pick(s, invasion.landings),
-          attacker,
-          defender,
-          4,
-          attacker,
-          battleLosses,
-          battleMarked,
-          before,
-          undefined,
-          campaignSides,
-        );
-        s.nations[attacker].wealth -= 20;
+      // Each coalition must plan its own landing. Choosing a single winner
+      // for the whole campaign can permanently strand the weaker island side.
+      for (const [attackers, defenders] of [
+        [sideA, sideB],
+        [sideB, sideA],
+      ]) {
+        const invasions = [];
+        for (const attacker of attackers)
+          if (coasts[attacker].length)
+            for (const defender of defenders)
+              if (coasts[defender].length) {
+                const landings = nearbySeaLandings(
+                  s,
+                  attacker,
+                  defender,
+                  coasts[attacker],
+                  true,
+                  WAR_SEA_CROSSING,
+                );
+                if (landings.length)
+                  invasions.push({ attacker, defender, landings });
+              }
+        if (invasions.length) {
+          const invasion = pick(s, invasions),
+            { attacker, defender } = invasion;
+          capture(
+            s,
+            pick(s, invasion.landings),
+            attacker,
+            defender,
+            4,
+            attacker,
+            battleLosses,
+            battleMarked,
+            before,
+            undefined,
+            campaignSides,
+          );
+          s.nations[attacker].wealth = Math.max(
+            0,
+            s.nations[attacker].wealth - 20,
+          );
+        }
       }
     }
     considerSettlement(s, a, b, started, before);

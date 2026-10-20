@@ -161,6 +161,42 @@ test("forced naval wars move territory across Greenland–Iceland, Iceland–UK,
     );
     validate(s);
   }
+  const icelandUk = createWorld("iceland-attacks-uk", 0, "earth", "empty"),
+    attackers = [],
+    [iceland, uk] = [1, 2];
+  for (const index of [iceland, uk]) {
+    const id = spawnNation(icelandUk, [...lands[index]][0], { radius: 0 });
+    attackers.push(id);
+    for (const tile of lands[index]) icelandUk.owner[tile] = id;
+  }
+  icelandUk.nations[attackers[0]].wealth = 0;
+  icelandUk.nations[attackers[0]].stability = 25;
+  icelandUk.nations[attackers[1]].wealth = 999;
+  icelandUk.nations[attackers[1]].stability = 95;
+  icelandUk.settings.expansion = false;
+  icelandUk.settings.wars = false;
+  icelandUk.settings.alliances = false;
+  icelandUk.settings.revolts = false;
+  assert.ok(
+    nearbySeaLandings(
+      icelandUk,
+      attackers[0],
+      attackers[1],
+      [...lands[iceland]].filter((tile) =>
+        neighbors(tile).some((next) => icelandUk.owner[next] === WATER),
+      ),
+      true,
+      16,
+    ).length > 0,
+    "Iceland should have a direct reachable landing in the UK",
+  );
+  assert.equal(declareWar(icelandUk, attackers[0], attackers[1]), true);
+  for (let year = 0; year < 16 && icelandUk.wars.length; year++) tick(icelandUk);
+  assert.ok(
+    [...lands[uk]].some((tile) => icelandUk.owner[tile] === attackers[0]),
+    "Iceland itself should land troops in the UK during the forced war",
+  );
+  validate(icelandUk);
 });
 test("every non-edge island in every map preset has a reachable next shore", async () => {
   const { REAL_MAPS } = await import("../dist/real-maps.js");
