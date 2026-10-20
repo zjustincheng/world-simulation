@@ -7,7 +7,7 @@ import {
 } from "./diplomacy.js";
 // Deterministic tile simulation. -1 = water, -2 = unclaimed land.
 import { REAL_MAPS } from "./real-maps.js";
-import { generateNationName } from "./names.js";
+import { capitalCoordinates, generateNationName } from "./names.js";
 export const W = 160,
   H = 100,
   WATER = -1,
@@ -845,8 +845,17 @@ export function declareWar(s, a, b, { force = true, reason = null } = {}) {
   s.warStats ||= {};
   s.warStats[pair(a, b).join(",")] = [0, 0];
   const [first, second] = pair(a, b);
-  const alliesA = coalition[first] || [],
-    alliesB = coalition[second] || [];
+  const overlappingAllies = new Set(
+    (coalition[first] || []).filter((id) =>
+      (coalition[second] || []).includes(id),
+    ),
+  );
+  const alliesA = (coalition[first] || []).filter(
+      (id) => id !== second && !overlappingAllies.has(id),
+    ),
+    alliesB = (coalition[second] || []).filter(
+      (id) => id !== first && !overlappingAllies.has(id),
+    );
   const coalitionText = (allies, side) =>
     allies.length
       ? ` Allied governments ${allies.map((id) => s.nations[id].name).join(", ")} enter the campaign in support of ${s.nations[side].name}.`
@@ -874,7 +883,10 @@ export function declareWar(s, a, b, { force = true, reason = null } = {}) {
     started: s.year,
     ended: null,
     reason: cause,
-    initial: [counts[first], counts[second]],
+    initial: [
+      [first, ...alliesA].reduce((sum, id) => sum + counts[id], 0),
+      [second, ...alliesB].reduce((sum, id) => sum + counts[id], 0),
+    ],
     outcome: "",
   });
   log(
@@ -1150,6 +1162,12 @@ export function paint(s, cell, radius, mode, nation = null) {
   return changed;
 }
 export const MAX_SEA_CROSSING = 4;
+const ARCTIC_SEA_CROSSING = 6;
+function seaRange(s, cell) {
+  const coordinates = capitalCoordinates(s, cell),
+    latitude = coordinates?.latitude ?? 90 - (((Math.floor(cell / W) + 0.5) / H) * 180);
+  return Math.abs(latitude) >= 55 ? ARCTIC_SEA_CROSSING : MAX_SEA_CROSSING;
+}
 // Find the closest shore through water only. Land blocks the route, and the
 // search never wraps map edges or treats a straight line over land as a voyage.
 export function nearbySeaLandings(
@@ -1167,27 +1185,29 @@ export function nearbySeaLandings(
     results = new Set();
   for (const origin of coast) {
     if (s.owner[origin] !== nation) continue;
+    const range = seaRange(s, origin);
     for (const cell of neighbors(origin)) {
-      if (s.owner[cell] === WATER && !seen.has(cell)) {
-        seen.add(cell);
-        queue.push([cell, 1]);
+      const key = `${cell}:${range}`;
+      if (s.owner[cell] === WATER && !seen.has(key)) {
+        seen.add(key);
+        queue.push([cell, 1, range]);
       }
     }
   }
-  let closest = MAX_SEA_CROSSING + 1;
+  let closest = ARCTIC_SEA_CROSSING + 1;
   for (let head = 0; head < queue.length; head++) {
-    const [cell, waterTiles] = queue[head];
+    const [cell, waterTiles, range] = queue[head];
     if (!allReachable && waterTiles > closest) break;
     for (const next of neighbors(cell)) {
       const owner = s.owner[next];
       if (owner === WATER) {
         if (
-          waterTiles < MAX_SEA_CROSSING &&
+          waterTiles < range &&
           (allReachable || waterTiles < closest) &&
-          !seen.has(next)
+          !seen.has(`${next}:${range}`)
         ) {
-          seen.add(next);
-          queue.push([next, waterTiles + 1]);
+          seen.add(`${next}:${range}`);
+          queue.push([next, waterTiles + 1, range]);
         }
       } else if (
         target === null ? owner >= 0 && owner !== nation : owner === target
@@ -1198,6 +1218,28 @@ export function nearbySeaLandings(
     }
   }
   return [...results];
+}
+function chooseSeaLanding(s, landings) {
+  const candidates = new Set(landings),
+    visited = new Set(),
+    shores = [];
+  for (const start of landings) {
+    if (visited.has(start)) continue;
+    const queue = [start],
+      group = [];
+    visited.add(start);
+    for (let head = 0; head < queue.length; head++) {
+      const cell = queue[head];
+      if (candidates.has(cell)) group.push(cell);
+      for (const next of neighbors(cell))
+        if (s.owner[next] !== WATER && !visited.has(next)) {
+          visited.add(next);
+          queue.push(next);
+        }
+    }
+    if (group.length) shores.push(group);
+  }
+  return shores.length ? pick(s, pick(s, shores)) : -1;
 }
 function frontiers(s) {
   const expansion = [],
@@ -1234,6 +1276,7 @@ function capture(
   battleMarked,
   territoryBaseline,
   campaignWeather,
+  campaignSides,
 ) {
   const queue = [cell],
     seen = new Set(queue);
@@ -1319,10 +1362,15 @@ function capture(
     });
   }
   if (taken) recordLoss(s, winner, loser, taken);
-  const key = pair(winner, loser).join(",");
+  const key = campaignSides
+    ? `${campaignSides.a},${campaignSides.b}`
+    : pair(winner, loser).join(",");
   s.warStats ||= {};
   s.warStats[key] ||= [0, 0];
-  s.warStats[key][winner < loser ? 0 : 1] += taken;
+  const winnerIsA = campaignSides
+    ? campaignSides.sideA.has(winner)
+    : winner < loser;
+  s.warStats[key][winnerIsA ? 0 : 1] += taken;
   return taken;
 }
 export function tick(s) {
@@ -1347,16 +1395,28 @@ export function tick(s) {
     }
     if (s.year % 6 === 0)
       for (const n of s.nations)
-        if (before[n.id] && coasts[n.id].length && random(s) < 0.22) {
-          const landings = nearbySeaLandings(s, n.id, NEUTRAL, coasts[n.id]);
-          if (landings.length) s.owner[pick(s, landings)] = n.id;
+        if (before[n.id] && coasts[n.id].length && random(s) < 0.35) {
+          const landings = nearbySeaLandings(
+            s,
+            n.id,
+            NEUTRAL,
+            coasts[n.id],
+            true,
+          );
+          if (landings.length) {
+            const landing = chooseSeaLanding(s, landings);
+            if (landing >= 0) s.owner[landing] = n.id;
+          }
         }
   }
   diplomacyTick(s, borders, coasts, before);
   const fronts = Array(s.nations.length).fill(0);
   for (const [a, b] of s.wars) {
-    fronts[a]++;
-    fronts[b]++;
+    const record = (s.warHistory || []).findLast(
+      (r) => r.ended === null && r.a === a && r.b === b,
+    );
+    for (const id of [a, ...(record?.alliesA || [])]) fronts[id]++;
+    for (const id of [b, ...(record?.alliesB || [])]) fronts[id]++;
   }
   const power = (id) => {
     const n = s.nations[id];
@@ -1376,18 +1436,41 @@ export function tick(s) {
   };
   for (const [a, b, started] of [...s.wars]) {
     if (!before[a] || !before[b]) continue;
-    const edges = borders.get(pair(a, b).join(",")) || [];
-    const pa = power(a),
-      pb = power(b);
+    const record = (s.warHistory || []).findLast(
+        (r) => r.ended === null && r.a === a && r.b === b,
+      ),
+      sideA = [a, ...(record?.alliesA || [])].filter((id) => before[id] > 0),
+      sideB = [b, ...(record?.alliesB || [])].filter((id) => before[id] > 0),
+      sideASet = new Set(sideA),
+      sideBSet = new Set(sideB),
+      edges = [];
+    for (const [key, adjacent] of borders) {
+      const [left, right] = key.split(",").map(Number);
+      if (
+        (sideASet.has(left) && sideBSet.has(right)) ||
+        (sideASet.has(right) && sideBSet.has(left))
+      )
+        edges.push(...adjacent);
+    }
+    const pa = sideA.reduce((sum, id) => sum + power(id), 0),
+      pb = sideB.reduce((sum, id) => sum + power(id), 0),
+      campaignSides = { a, b, sideA: sideASet };
     if (edges.length) {
       const rounds = Math.min(7, 1 + Math.ceil(edges.length / 35));
       for (let r = 0; r < rounds; r++) {
         const edge = pick(s, edges);
         // Earlier battles may have changed this edge; never attack through a third nation.
         const owners = edge.map((i) => s.owner[i]);
-        if (!owners.includes(a) || !owners.includes(b)) continue;
-        const attacker = random(s) < pa / (pa + pb) ? a : b,
-          defender = attacker === a ? b : a;
+        const isSideAAttacking = random(s) < pa / (pa + pb),
+          firstIsSideA = sideASet.has(owners[0]);
+        if (
+          !((sideASet.has(owners[0]) && sideBSet.has(owners[1])) ||
+            (sideASet.has(owners[1]) && sideBSet.has(owners[0])))
+        )
+          continue;
+        const attacker =
+            firstIsSideA === isSideAAttacking ? owners[0] : owners[1],
+          defender = attacker === owners[0] ? owners[1] : owners[0];
         const target = edge.find((i) => s.owner[i] === defender);
         if (target === undefined) continue;
         const seasonIndex = (r + s.year) % SEASONS.length;
@@ -1426,7 +1509,7 @@ export function tick(s) {
           random(s) < attackPower / (attackPower + defensivePower)
             ? attacker
             : defender;
-        const loser = winner === a ? b : a;
+        const loser = winner === attacker ? defender : attacker;
         capture(
           s,
           target,
@@ -1450,27 +1533,44 @@ export function tick(s) {
           battleMarked,
           before,
           campaignWeather,
+          campaignSides,
         );
       }
-    } else if (s.year % 4 === 0 && coasts[a].length && coasts[b].length) {
-      const winner = random(s) < pa / (pa + pb) ? a : b,
-        loser = winner === a ? b : a;
-      if (s.nations[winner].wealth > 30) {
-        const landings = nearbySeaLandings(s, winner, loser, coasts[winner]);
-        if (landings.length) {
-          capture(
-            s,
-            pick(s, landings),
-            winner,
-            loser,
-            4,
-            winner,
-            battleLosses,
-            battleMarked,
-            before,
-          );
-          s.nations[winner].wealth -= 20;
-        }
+    } else if (s.year % 4 === 0) {
+      const sideAWins = random(s) < pa / (pa + pb),
+        attackers = sideAWins ? sideA : sideB,
+        defenders = sideAWins ? sideB : sideA,
+        invasions = [];
+      for (const attacker of attackers)
+        if (s.nations[attacker].wealth > 30 && coasts[attacker].length)
+          for (const defender of defenders)
+            if (coasts[defender].length) {
+              const landings = nearbySeaLandings(
+                s,
+                attacker,
+                defender,
+                coasts[attacker],
+                true,
+              );
+              if (landings.length) invasions.push({ attacker, defender, landings });
+            }
+      if (invasions.length) {
+        const invasion = pick(s, invasions),
+          { attacker, defender } = invasion;
+        capture(
+          s,
+          pick(s, invasion.landings),
+          attacker,
+          defender,
+          4,
+          attacker,
+          battleLosses,
+          battleMarked,
+          before,
+          undefined,
+          campaignSides,
+        );
+        s.nations[attacker].wealth -= 20;
       }
     }
     considerSettlement(s, a, b, started, before);

@@ -210,6 +210,29 @@ test("an alliance supports its member without opening a second war", () => {
   validate(s);
 });
 
+test("a defending ally fights the aggressor on its own front in the same campaign", () => {
+  const s = createWorld("allied-front", 3, "arena");
+  s.settings.expansion = false;
+  s.settings.revolts = false;
+  s.settings.wars = false;
+  for (let cell = 0; cell < s.owner.length; cell++)
+    if (s.owner[cell] !== WATER) {
+      const x = cell % W;
+      s.owner[cell] = x < 80 ? 0 : x === 80 ? 2 : 1;
+    }
+  for (const nation of s.nations) {
+    nation.efficiency = nation.id === 0 ? 15 : 150;
+    nation.wealth = nation.id === 0 ? 0 : 999;
+    nation.stability = nation.id === 0 ? 5 : 100;
+  }
+  assert.equal(ally(s, 1, 2), true);
+  assert.equal(declareWar(s, 0, 1, { reason: "a test invasion" }), true);
+  for (let year = 0; year < 8 && s.wars.length; year++) tick(s);
+  assert.ok(s.owner.some((owner, cell) => owner === 2 && cell % W < 80));
+  assert.equal(s.warHistory.length, 1);
+  validate(s);
+});
+
 test("diplomacy cannot link active war opponents through a new alliance", () => {
   const s = createWorld("no-cross-war-pacts", 3, "arena");
   assert.equal(ally(s, 0, 2), true);

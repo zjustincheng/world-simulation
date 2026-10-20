@@ -11,7 +11,9 @@ import {
   tick,
   declareWar,
   validate,
+  neighbors,
 } from "../dist/engine.js";
+import { capitalCoordinates } from "../dist/names.js";
 const cell = (x, y = 50) => y * W + x;
 function islandWorld(points) {
   const s = createWorld("sea-regression", 0, "blank");
@@ -66,6 +68,46 @@ test("centuries of colonization can reach nearby islands but never a distant oce
   assert.equal(s.owner[cell(14)], 0);
   assert.equal(s.owner[cell(100)], NEUTRAL);
   assert.equal(s.owner[cell(50)], WATER);
+  validate(s);
+});
+test("Greenland can reach and colonize Iceland across the Arctic route", () => {
+  const s = createWorld("greenland-iceland", 0, "earth", "empty"),
+    nearest = (longitude, latitude) =>
+      s.owner.reduce((best, owner, i) => {
+        if (owner === WATER) return best;
+        const point = capitalCoordinates(s, i),
+          distance =
+            (point.longitude - longitude) ** 2 +
+            (point.latitude - latitude) ** 2;
+        return distance < best.distance ? { cell: i, distance } : best;
+      }, { cell: -1, distance: Infinity }).cell,
+    component = (start) => {
+      const queue = [start],
+        cells = new Set(queue);
+      for (let head = 0; head < queue.length; head++)
+        for (const next of neighbors(queue[head]))
+          if (s.owner[next] !== WATER && !cells.has(next)) {
+            cells.add(next);
+            queue.push(next);
+          }
+      return cells;
+    },
+    greenland = component(nearest(-42, 72)),
+    iceland = component(nearest(-19, 65));
+  spawnNation(s, [...greenland][0], { radius: 0, name: "Greenland" });
+  for (const cell of greenland) s.owner[cell] = 0;
+  s.settings.wars = false;
+  s.settings.revolts = false;
+  const coasts = [...greenland].filter((cell) =>
+    neighbors(cell).some((next) => s.owner[next] === WATER),
+  );
+  assert.ok(
+    nearbySeaLandings(s, 0, NEUTRAL, coasts, true).some((cell) =>
+      iceland.has(cell),
+    ),
+  );
+  for (let year = 0; year < 400; year++) tick(s);
+  assert.ok([...iceland].some((cell) => s.owner[cell] === 0));
   validate(s);
 });
 test("forced war cannot teleport an invasion across a wide ocean", () => {
