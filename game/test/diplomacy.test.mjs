@@ -33,6 +33,11 @@ test("stable neighbors remain at peace for centuries with no arbitrary declarati
   );
   assert.equal(declareWar(s, 0, 1, { force: false }), false);
 });
+test("ordinary connected worlds can escalate disputes into wars", () => {
+  const s = createWorld("USER-TEST-0", 8, "continents", "borders");
+  for (let i = 0; i < 250 && !s.warHistory.length; i++) tick(s);
+  assert.ok(s.warHistory.length > 0);
+});
 test("territorial policy escalates through a dispute, talks and mobilization before war", () => {
   const s = world();
   s.nations[0].aggression = 0.95;

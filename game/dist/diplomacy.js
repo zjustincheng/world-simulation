@@ -173,16 +173,16 @@ export function diplomacyTick(s, borders, coasts, sizes) {
           r.initiator = expanding === a ? b : a;
           r.reason = `${s.nations[r.initiator].name} demands limits on ${s.nations[expanding].name}'s expansion along their shared frontier`;
         } else if (
-          (borders.get(key)?.length || 0) >= 18 &&
-          Math.max(A.aggression, B.aggression) >= 0.82
+          (borders.get(key)?.length || 0) >= 12 &&
+          Math.max(A.aggression, B.aggression) >= 0.7
         ) {
           r.initiator = A.aggression > B.aggression ? a : b;
           r.reason = `the government of ${s.nations[r.initiator].name} pursues a revision of the settled border with ${s.nations[r.initiator === a ? b : a].name}`;
         } else if (
-          (borders.get(key)?.length || 0) >= 12 &&
+          (borders.get(key)?.length || 0) >= 8 &&
           s.year - r.since >= 15 &&
           Math.min(A.wealth, B.wealth) >= 60 &&
-          Math.max(A.aggression, B.aggression) >= 0.78
+          Math.max(A.aggression, B.aggression) >= 0.68
         ) {
           const current = [
             militaryIndex(s, a, sizes[a]),
@@ -196,7 +196,7 @@ export function diplomacyTick(s, borders, coasts, sizes) {
             relativeShift >= 1.2 ? a : relativeShift <= 1 / 1.2 ? b : -1;
           if (
             challenger >= 0 &&
-            s.nations[challenger].aggression >= 0.78 &&
+            s.nations[challenger].aggression >= 0.68 &&
             current[challenger === a ? 0 : 1] /
               Math.max(1, current[challenger === a ? 1 : 0]) >=
               0.7
@@ -270,7 +270,7 @@ export function diplomacyTick(s, borders, coasts, sizes) {
     if (
       r.stage >= 2 &&
       r.tension >= 60 &&
-      (ratio < 0.55 || attacker.aggression < 0.8)
+      (ratio < 0.55 || attacker.aggression < 0.68)
     ) {
       log(
         s,
