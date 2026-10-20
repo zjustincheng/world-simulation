@@ -26,13 +26,13 @@ function islandWorld(points) {
   s.settings.revolts = false;
   return s;
 }
-test("nearby sea routes allow four water tiles, reject five, and choose the nearest shore", () => {
-  const allowed = islandWorld([[10], [15]]);
-  assert.deepEqual(nearbySeaLandings(allowed, 0), [cell(15)]);
-  const distant = islandWorld([[10], [16]]);
+test("sea routes allow sixteen water tiles, reject seventeen, and choose the nearest shore", () => {
+  const allowed = islandWorld([[10], [27]]);
+  assert.deepEqual(nearbySeaLandings(allowed, 0), [cell(27)]);
+  const distant = islandWorld([[10], [28]]);
   assert.deepEqual(nearbySeaLandings(distant, 0), []);
-  const nearest = islandWorld([[10], [13], [15]]);
-  assert.deepEqual(nearbySeaLandings(nearest, 0), [cell(13)]);
+  const nearest = islandWorld([[10], [20], [27]]);
+  assert.deepEqual(nearbySeaLandings(nearest, 0), [cell(20)]);
 });
 test("diplomacy can see every reachable shore beyond the nearest landing", () => {
   const s = islandWorld([[10], [15], [30], [34]]);
@@ -160,6 +160,53 @@ test("forced naval wars move territory across Greenland–Iceland, Iceland–UK,
       `${locations[left][0]} and ${locations[right][0]} should exchange territory`,
     );
     validate(s);
+  }
+});
+test("every non-edge island in every map has a reachable next shore", async () => {
+  const { REAL_MAPS } = await import("../dist/real-maps.js");
+  for (const preset of ["islands", ...Object.keys(REAL_MAPS)]) {
+    const s = createWorld(`island-audit-${preset}`, 0, preset, "empty"),
+      seen = new Set(),
+      components = [];
+    for (let start = 0; start < s.owner.length; start++)
+      if (s.owner[start] === NEUTRAL && !seen.has(start)) {
+        const cells = [start];
+        seen.add(start);
+        for (let head = 0; head < cells.length; head++)
+          for (const next of neighbors(cells[head]))
+            if (s.owner[next] === NEUTRAL && !seen.has(next)) {
+              seen.add(next);
+              cells.push(next);
+            }
+        components.push(cells);
+      }
+    const nationIds = components.map((cells) => {
+      const id = spawnNation(s, cells[0], { radius: 0, quiet: true });
+      for (const tile of cells) s.owner[tile] = id;
+      return id;
+    });
+    for (let index = 0; index < components.length; index++) {
+      const cells = components[index],
+        coasts = cells.filter((tile) =>
+          neighbors(tile).some((next) => s.owner[next] === WATER),
+        );
+      if (!coasts.length) continue;
+      const edgeFragment = cells.some((tile) => {
+        const x = tile % W, y = Math.floor(tile / W);
+        return x === 0 || x === W - 1 || y === 0 || y === H - 1;
+      });
+      const reachable = nearbySeaLandings(
+        s,
+        nationIds[index],
+        null,
+        coasts,
+        true,
+      );
+      assert.ok(
+        reachable.length || edgeFragment,
+        `${preset} landmass ${index} has no reachable next shore`,
+      );
+    }
   }
 });
 test("forced war cannot teleport an invasion across a wide ocean", () => {

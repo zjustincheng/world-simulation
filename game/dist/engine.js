@@ -1161,10 +1161,10 @@ export function paint(s, cell, radius, mode, nation = null) {
   reconcile(s);
   return changed;
 }
-export const MAX_SEA_CROSSING = 4;
-const ARCTIC_SEA_CROSSING = 6;
+export const MAX_SEA_CROSSING = 16;
+const ARCTIC_SEA_CROSSING = 16;
 // Armies can sustain a longer crossing than settlers or routine diplomacy can.
-const WAR_SEA_CROSSING = 16;
+const WAR_SEA_CROSSING = MAX_SEA_CROSSING;
 function seaRange(s, cell) {
   const coordinates = capitalCoordinates(s, cell),
     latitude = coordinates?.latitude ?? 90 - (((Math.floor(cell / W) + 0.5) / H) * 180);
@@ -1222,10 +1222,26 @@ export function nearbySeaLandings(
   }
   return [...results];
 }
-function chooseSeaLanding(s, landings) {
+function chooseSeaLanding(s, landings, nation) {
   const candidates = new Set(landings),
     visited = new Set(),
-    shores = [];
+    shores = [],
+    owned = s.owner.flatMap((owner, cell) => (owner === nation ? [cell] : [])),
+    center = (cells) => {
+      const total = cells.reduce(
+        (sum, cell) => {
+          sum.x += cell % W;
+          sum.y += Math.floor(cell / W);
+          return sum;
+        },
+        { x: 0, y: 0 },
+      );
+      return cells.length
+        ? Math.round(total.y / cells.length) * W +
+            Math.round(total.x / cells.length)
+        : -1;
+    },
+    originCenter = center(owned);
   for (const start of landings) {
     if (visited.has(start)) continue;
     const queue = [start],
@@ -1240,9 +1256,17 @@ function chooseSeaLanding(s, landings) {
           queue.push(next);
         }
     }
-    if (group.length) shores.push(group);
+    if (group.length) {
+      const proximity = distance(originCenter, center(group));
+      shores.push({ group, proximity });
+    }
   }
-  return shores.length ? pick(s, pick(s, shores)) : -1;
+  if (!shores.length) return -1;
+  const nearest = Math.min(...shores.map((shore) => shore.proximity));
+  return pick(
+    s,
+    pick(s, shores.filter((shore) => shore.proximity === nearest).map((shore) => shore.group)),
+  );
 }
 function frontiers(s) {
   const expansion = [],
@@ -1407,7 +1431,7 @@ export function tick(s) {
             true,
           );
           if (landings.length) {
-            const landing = chooseSeaLanding(s, landings);
+            const landing = chooseSeaLanding(s, landings, n.id);
             if (landing >= 0) s.owner[landing] = n.id;
           }
         }
