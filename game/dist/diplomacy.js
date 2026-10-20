@@ -140,10 +140,11 @@ export function diplomacyTick(s, borders, coasts, sizes) {
       !hasTruce(s, challenger, balance.leader)
     ) {
       const r = relation(s, challenger, balance.leader, sizes);
-      if (!r.reason && r.napUntil <= s.year) {
+      if (!r.reason && !(r.napUntil > s.year)) {
         r.initiator = challenger;
-        r.since = s.year;
-        r.stage = 0;
+        r.since = Math.max(1, s.year - 12);
+        r.stage = 2;
+        r.tension = Math.max(r.tension, 60);
         r.reason = `${s.nations[challenger].name} joins its neighbors in demanding limits on ${s.nations[balance.leader].name}'s growing regional dominance`;
       }
     }
@@ -290,10 +291,11 @@ export function diplomacyTick(s, borders, coasts, sizes) {
     const ratio =
       coalitionIndex(s, attacker.id, sizes) /
       Math.max(1, coalitionIndex(s, target, sizes));
+    const containment = r.reason.includes("growing regional dominance");
     if (
       r.stage >= 2 &&
       r.tension >= 60 &&
-      (ratio < 0.55 || attacker.aggression < 0.68)
+      (ratio < 0.35 || (!containment && attacker.aggression < 0.68))
     ) {
       log(
         s,
@@ -317,7 +319,7 @@ export function diplomacyTick(s, borders, coasts, sizes) {
       r.stage === 3 &&
       r.tension >= 100 &&
       s.year - r.since >= 12 &&
-      ratio >= 0.55
+      ratio >= 0.35
     ) {
       declareWar(s, attacker.id, target, {
         force: false,
