@@ -25,7 +25,6 @@ import {
   GOVERNMENTS,
   RELIGIONS,
   governmentName,
-  allied,
   allianceMembers,
 } from "./engine.js";
 import { REAL_MAPS } from "./real-maps.js";
@@ -71,6 +70,8 @@ let toastTimer,
   showEffects = true;
 let counts = [],
   productive = [],
+  diplomacyColors = [],
+  diplomacyBlocs = [],
   landCount = 0,
   labelPositions = [],
   borderLines = [],
@@ -109,23 +110,64 @@ function fertilityColor(fertility) {
   if (fertility < 0.72) return "#9ab56b";
   return "#4f925e";
 }
+const diplomacyPalette = [
+  "#e2a85c",
+  "#61b9a5",
+  "#d97b72",
+  "#9c8bd2",
+  "#78a9dc",
+  "#d27eae",
+  "#a6bb62",
+  "#ce986d",
+];
+function buildDiplomacyBlocs() {
+  const remaining = new Set(
+    world.nations.filter((n) => counts[n.id] > 0).map((n) => n.id),
+  );
+  diplomacyColors = Array(world.nations.length).fill(null);
+  diplomacyBlocs = [];
+  while (remaining.size) {
+    const first = Math.min(...remaining),
+      members = [first, ...allianceMembers(world, first)]
+        .filter((id) => remaining.has(id))
+        .sort((a, b) => a - b);
+    members.forEach((id) => remaining.delete(id));
+    if (members.length < 2) continue;
+    const color = diplomacyPalette[diplomacyBlocs.length % diplomacyPalette.length];
+    members.forEach((id) => (diplomacyColors[id] = color));
+    diplomacyBlocs.push({
+      color,
+      members: members.map((id) => world.nations[id].name),
+    });
+  }
+}
+function updateMapKey() {
+  const key = $(".map-key");
+  key.classList.toggle("fertility", layer === "fertility");
+  key.classList.toggle("diplomacy", layer === "diplomacy");
+  $(".diplomacy-key").innerHTML = diplomacyBlocs.length
+    ? diplomacyBlocs
+        .map(
+          (bloc) =>
+            `<span><i style="background:${bloc.color}"></i>${esc(bloc.members.join(" · "))}</span>`,
+        )
+        .join("") +
+      '<span><i style="background:#62798d"></i>Independent</span><span><i style="background:#637063"></i>Unclaimed land</span><span><i class="battle-dot"></i>War front</span>'
+    : '<span>No active alliances</span><span><i style="background:#62798d"></i>Independent</span><span><i class="battle-dot"></i>War front</span>';
+}
 function mapColor(id, height, cell) {
   if (id === WATER) return "#20384c";
   if (layer === "fertility") return fertilityColor(fertilityAt(world, cell));
   if (id === NEUTRAL) return layer === "terrain" ? "#82936d" : "#637063";
   if (layer === "terrain")
     return height > 0.28 ? "#a9a78b" : height > 0.14 ? "#7d946e" : "#97ab7c";
-  if (layer === "diplomacy" && selected !== null) {
-    if (id === selected) return "#e4c36b";
-    if (related(world.wars, id, selected)) return "#dc6a66";
-    if (allied(world, id, selected)) return "#64c697";
-    return "#62798d";
-  }
+  if (layer === "diplomacy") return diplomacyColors[id] || "#62798d";
   return world.nations[id].color;
 }
 function rebuildMap() {
   counts = stats(world);
   productive = productiveTerritory(world);
+  buildDiplomacyBlocs();
   landCount = world.owner.filter((n) => n !== WATER).length;
   const pixels = pixelCtx.createImageData(W, H),
     sums = world.nations.map(() => ({ x: 0, y: 0 }));
@@ -188,6 +230,7 @@ function rebuildMap() {
       p.cell = i;
     }
   });
+  updateMapKey();
 }
 function draw(now = performance.now()) {
   const dpr = devicePixelRatio || 1;
@@ -1199,9 +1242,7 @@ $$("[data-layer]").forEach(
     (b.onclick = () => {
       layer = b.dataset.layer;
       $$("[data-layer]").forEach((x) => x.classList.toggle("active", x === b));
-      $(".map-key").classList.toggle("fertility", layer === "fertility");
-      if (layer === "diplomacy" && selected === null)
-        toast("Select a nation to see its allies and enemies.");
+      updateMapKey();
       rebuildMap();
       draw();
     }),

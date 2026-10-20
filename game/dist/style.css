@@ -288,6 +288,23 @@ canvas.editing {
   display: flex;
   align-items: center;
 }
+.map-key .diplomacy-key {
+  display: none;
+}
+.map-key.diplomacy .general-key {
+  display: none;
+}
+.map-key.diplomacy .diplomacy-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  max-width: min(70vw, 760px);
+  max-height: 64px;
+  overflow: hidden;
+}
+.map-key .diplomacy-key span {
+  white-space: nowrap;
+}
 .battle-dot {
   background: #ffb5a1;
   box-shadow: 0 0 7px #ff8b75;
