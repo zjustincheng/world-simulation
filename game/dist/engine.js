@@ -778,6 +778,10 @@ export function declareWar(s, a, b, { force = true, reason = null } = {}) {
     related(s.wars, a, b)
   )
     return false;
+  const coalition = {
+    [a]: allianceMembers(s, a),
+    [b]: allianceMembers(s, b),
+  };
   const pactPath = alliancePath(s, a, b);
   if (!force && (hasTruce(s, a, b) || pactPath.length || !reason)) return false;
   if (hasTruce(s, a, b))
@@ -806,9 +810,17 @@ export function declareWar(s, a, b, { force = true, reason = null } = {}) {
   s.warStats ||= {};
   s.warStats[pair(a, b).join(",")] = [0, 0];
   const [first, second] = pair(a, b);
+  const alliesA = coalition[first] || [],
+    alliesB = coalition[second] || [];
+  const coalitionText = (allies, side) =>
+    allies.length
+      ? ` Allied governments ${allies.map((id) => s.nations[id].name).join(", ")} enter the campaign in support of ${s.nations[side].name}.`
+      : "";
   const cause =
-    reason ||
-    "a direct intervention by the player orders this war, overriding ordinary diplomacy";
+    (reason ||
+      "a direct intervention by the player orders this war, overriding ordinary diplomacy") +
+    coalitionText(alliesA, first) +
+    coalitionText(alliesB, second);
   s.warHistory ||= [];
   if (s.warHistory.length >= 2048)
     s.warHistory.splice(
@@ -822,6 +834,8 @@ export function declareWar(s, a, b, { force = true, reason = null } = {}) {
     a: first,
     b: second,
     initiator: a,
+    alliesA,
+    alliesB,
     started: s.year,
     ended: null,
     reason: cause,
@@ -1568,7 +1582,16 @@ export function validate(input) {
         r.outcome.length <= 1000 &&
         Array.isArray(r.initial) &&
         r.initial.length === 2 &&
-        r.initial.every((n) => integer(n) && n >= 0),
+        r.initial.every((n) => integer(n) && n >= 0) &&
+        ["alliesA", "alliesB"].every(
+          (key) =>
+            r[key] === undefined ||
+            (Array.isArray(r[key]) &&
+              r[key].length <= MAX_NATIONS &&
+              r[key].every(
+                (id) => integer(id) && id >= 0 && id < s.nations.length,
+              )),
+        ),
     )
   )
     fail();
