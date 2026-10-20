@@ -950,13 +950,43 @@ export function rebel(s, a) {
   if (s.wars.length) return false;
   const cells = s.owner.map((n, i) => (n === a ? i : -1)).filter((i) => i >= 0);
   if (cells.length < 30 || s.nations.length >= MAX_NATIONS) return false;
-  // Start away from the capital, then take a connected region without wrapping map edges.
+  // Prefer a remote province that is already disconnected from the capital's
+  // landmass. If the nation is contiguous, favor the most distant frontier.
   const candidates = cells.filter(
     (i) => distance(i, s.nations[a].capital) > 16,
   );
   if (!candidates.length) return false;
-  const center = pick(s, candidates),
-    id = s.nations.length,
+  const candidateSet = new Set(candidates),
+    visited = new Set(),
+    remote = [];
+  for (const start of cells) {
+    if (visited.has(start)) continue;
+    const component = [start];
+    visited.add(start);
+    for (let head = 0; head < component.length; head++)
+      for (const next of neighbors(component[head]))
+        if (s.owner[next] === a && !visited.has(next)) {
+          visited.add(next);
+          component.push(next);
+        }
+    if (component.length >= 8 && !component.includes(s.nations[a].capital))
+      remote.push(...component.filter((i) => candidateSet.has(i)));
+  }
+  const preferred = remote.length ? remote : candidates;
+  const totalWeight = preferred.reduce(
+    (sum, i) => sum + 1 + Math.sqrt(distance(i, s.nations[a].capital)) / 24,
+    0,
+  );
+  let roll = random(s) * totalWeight;
+  let center = preferred[preferred.length - 1];
+  for (const cell of preferred) {
+    roll -= 1 + Math.sqrt(distance(cell, s.nations[a].capital)) / 24;
+    if (roll < 0) {
+      center = cell;
+      break;
+    }
+  }
+  const id = s.nations.length,
     old = s.nations[a];
   s.nations.push(
     nationRecord(

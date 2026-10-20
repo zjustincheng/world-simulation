@@ -188,6 +188,33 @@ test("revolutions produce a connected new country and collapse frees territory",
   validate(s);
 });
 
+test("revolts favor a distant disconnected province over the capital heartland", () => {
+  const s = createWorld("remote-rebellion", 0, "blank"),
+    capital = 50 * W + 30,
+    island = 50 * W + 85;
+  paint(s, capital, 8, "land");
+  const nation = spawnNation(s, capital, { radius: 8 });
+  paint(s, island, 4, "land");
+  paint(s, island, 4, "territory", nation);
+  const remoteCells = s.owner
+    .map((owner, cell) =>
+      owner === nation && Math.abs((cell % W) - (island % W)) <= 4 ? cell : -1,
+    )
+    .filter((cell) => cell >= 0);
+  assert.ok(remoteCells.length >= 8);
+  assert.equal(rebel(s, nation), true);
+  const rebelId = s.nations.length - 1;
+  assert.ok(remoteCells.includes(s.nations[rebelId].capital));
+  assert.ok(
+    ((s.nations[rebelId].capital % W) - (capital % W)) ** 2 +
+      (Math.floor(s.nations[rebelId].capital / W) - Math.floor(capital / W)) **
+        2 >
+      16,
+  );
+  assert.ok(remoteCells.some((cell) => s.owner[cell] === rebelId));
+  validate(s);
+});
+
 test("old extinct nation records do not prevent new revolts", () => {
   const s = createWorld("revolt-history", 2, "arena");
   // Model a save that has accumulated many historical countries while the
