@@ -855,6 +855,13 @@ export function peace(
     const outcome = net
       ? `${s.nations[net > 0 ? first : second].name} retains a net gain of ${Math.abs(net)} tiles from the fighting`
       : "neither side retains a net territorial gain from the fighting";
+    if (net) {
+      const defeated = s.nations[net > 0 ? second : first];
+      defeated.stability = Math.max(
+        5,
+        defeated.stability - Math.min(30, 15 + Math.floor(Math.abs(net) * 0.2)),
+      );
+    }
     const record = (s.warHistory || []).findLast(
       (r) => r.ended === null && r.a === first && r.b === second,
     );
@@ -1343,8 +1350,8 @@ export function tick(s) {
       !s.wars.length &&
       s.nations.length < MAX_NATIONS &&
       after[id] > 150 &&
-      n.stability < 45 &&
-      random(s) < 0.018
+      n.stability < 58 &&
+      random(s) < (n.stability < 28 ? 0.25 : n.stability < 45 ? 0.16 : 0.07)
     )
       rebel(s, id);
   }

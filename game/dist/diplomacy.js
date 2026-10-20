@@ -184,6 +184,12 @@ export function diplomacyTick(s, borders, coasts, sizes) {
     if (s.wars.length) continue;
     const attacker = s.nations[r.initiator],
       target = r.initiator === a ? b : a;
+    const lastInitiated = (s.warHistory || []).findLast(
+      (war) => war.initiator === attacker.id,
+    );
+    // Let other states set the agenda after a campaign instead of allowing
+    // the same successful aggressor to chain wars as soon as each truce ends.
+    if (lastInitiated && s.year - lastInitiated.started < 24) continue;
     if (s.wars.length || attacker.wealth < 60 || attacker.stability < 45) {
       r.tension = Math.max(0, r.tension - 5);
       continue;

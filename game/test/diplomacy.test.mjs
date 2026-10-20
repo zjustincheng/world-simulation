@@ -94,6 +94,26 @@ test("alliances, the single-war rule and an empty treasury restrain declarations
     false,
   );
 });
+test("recent war leaders leave room for another country's dispute to take priority", () => {
+  const s = createWorld("recent-aggressor", 4, "arena");
+  s.settings.revolts = false;
+  s.settings.expansion = false;
+  s.nations.forEach((n) => {
+    n.aggression = 0.6;
+    n.wealth = 300;
+  });
+  declareWar(s, 0, 1, { reason: "a test campaign" });
+  peace(s, 0, 1);
+  s.year = 20;
+  const r = relation(s, 0, 2);
+  r.reason = "a territorial claim";
+  r.initiator = 0;
+  r.stage = 3;
+  r.tension = 100;
+  r.since = 1;
+  tick(s);
+  assert.equal(s.wars.length, 0);
+});
 test("war outcomes end prolonged fighting and remain in the saved historical record", () => {
   const s = world();
   declareWar(s, 0, 1, { reason: "a disputed frontier treaty" });

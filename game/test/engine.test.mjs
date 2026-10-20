@@ -65,6 +65,7 @@ test("four centuries of conflict conserve land and keep valid nations and relati
   assert.ok(s.warHistory.length > 0);
   assert.equal(mostConcurrentWars, 1);
   assert.ok(new Set(s.warHistory.flatMap((war) => [war.a, war.b])).size >= 8);
+  assert.ok(s.events.some((event) => event.text.includes("rebels against")));
 });
 
 test("war moves borders, alliances stop wars, peace and annexation work", () => {
@@ -137,6 +138,16 @@ test("revolutions produce a connected new country and collapse frees territory",
   collapse(s, id);
   cells.forEach((i) => assert.equal(s.owner[i], NEUTRAL));
   assert.equal(stats(s)[id], 0);
+  validate(s);
+});
+
+test("revolts wait for the active campaign to settle", () => {
+  const s = createWorld("revolt-during-war", 2, "arena");
+  declareWar(s, 0, 1, { reason: "a border crisis" });
+  const count = s.nations.length;
+  assert.equal(rebel(s, 0), false);
+  assert.equal(s.nations.length, count);
+  assert.equal(s.wars.length, 1);
   validate(s);
 });
 
