@@ -47,7 +47,8 @@
           <div class="map-tabs" aria-label="Map mode">
             <button class="active" data-layer="political">Political</button
             ><button data-layer="diplomacy">Diplomacy</button
-            ><button data-layer="terrain">Terrain</button>
+            ><button data-layer="terrain">Terrain</button
+            ><button data-layer="fertility">Fertility</button>
           </div>
           <label class="change-toggle"
             ><input id="show-changes" type="checkbox" checked /> Changes</label
@@ -97,8 +98,15 @@
             ><button id="undo" disabled>↶ Undo stroke</button>
           </div>
           <div class="map-key">
-            <span><i style="background: #637063"></i>Unclaimed land</span
-            ><span><i class="battle-dot"></i>Active front</span>
+            <span class="general-key"
+              ><i style="background: #637063"></i>Unclaimed land</span
+            ><span class="general-key"
+              ><i class="battle-dot"></i>Active front</span
+            ><span class="fertility-key"
+              ><i style="background: #765c50"></i>Poor
+              <i style="background: #c2a966"></i>Moderate
+              <i style="background: #4f925e"></i>Fertile</span
+            >
           </div>
           <div class="zoom-controls">
             <button id="zoom-in" aria-label="Zoom in">＋</button

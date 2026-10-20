@@ -278,6 +278,16 @@ canvas.editing {
   margin-right: 6px;
   border-radius: 1px;
 }
+.map-key .fertility-key {
+  display: none;
+}
+.map-key.fertility .general-key {
+  display: none;
+}
+.map-key.fertility .fertility-key {
+  display: flex;
+  align-items: center;
+}
 .battle-dot {
   background: #ffb5a1;
   box-shadow: 0 0 7px #ff8b75;

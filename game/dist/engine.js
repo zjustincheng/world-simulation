@@ -496,6 +496,38 @@ export function stats(s) {
   for (const n of s.owner) if (n >= 0) counts[n]++;
   return counts;
 }
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+export function fertilityAt(s, cell) {
+  if (s.owner[cell] === WATER) return 0;
+  const x = cell % W,
+    y = Math.floor(cell / W),
+    bounds = REAL_MAPS[s.preset]?.bounds,
+    latitude = bounds
+      ? bounds[3] - ((y + 0.5) / H) * (bounds[3] - bounds[1])
+      : 90 - ((y + 0.5) / H) * 180,
+    absLatitude = Math.abs(latitude),
+    temperature = Math.max(0.04, 1 - Math.max(0, absLatitude - 38) / 34),
+    tropicalHeat = absLatitude < 8 ? 0.82 + (absLatitude / 8) * 0.18 : 1,
+    desertBelt = clamp(1 - Math.abs(absLatitude - 25) / 13, 0, 1),
+    moisture = clamp(
+      0.78 +
+        0.15 * Math.sin(x * 0.11 + Math.sin(y * 0.08) * 2) +
+        0.1 * Math.cos(y * 0.17 + x * 0.025) -
+        desertBelt * 0.48,
+      0.12,
+      1,
+    ),
+    elevation = Math.max(0.2, 1 - Math.max(0, s.terrain[cell] - 0.18) * 1.8);
+  return clamp(temperature * tropicalHeat * moisture * elevation, 0.02, 1);
+}
+export function productiveTerritory(s) {
+  const totals = Array(s.nations.length).fill(0);
+  for (let cell = 0; cell < s.owner.length; cell++) {
+    const id = s.owner[cell];
+    if (id >= 0) totals[id] += 0.12 + 0.88 * fertilityAt(s, cell);
+  }
+  return totals;
+}
 const distance = (i, j) =>
   ((i % W) - (j % W)) ** 2 + (Math.floor(i / W) - Math.floor(j / W)) ** 2;
 
@@ -954,6 +986,17 @@ export function ally(s, a, b) {
     );
     return false;
   }
+  const membersA = new Set([a, ...allianceMembers(s, a)]),
+    membersB = new Set([b, ...allianceMembers(s, b)]);
+  if (
+    s.wars.some(
+      ([left, right]) =>
+        !((left === a && right === b) || (left === b && right === a)) &&
+        ((membersA.has(left) && membersB.has(right)) ||
+          (membersA.has(right) && membersB.has(left))),
+    )
+  )
+    return false;
   peace(s, a, b);
   settleRelation(s, a, b);
   s.alliances.push(pair(a, b));
@@ -1286,7 +1329,8 @@ export function tick(s) {
   s.year++;
   s.climate = { year: s.year, seasons: seasonalOutlook(s) };
   s.flashes = [];
-  const before = stats(s);
+  const before = stats(s),
+    productiveBefore = productiveTerritory(s);
   if (!s.settings.ai) return;
   const battleLosses = Array(s.nations.length).fill(0),
     battleMarked = Array(s.nations.length).fill(false);
@@ -1318,7 +1362,7 @@ export function tick(s) {
     const n = s.nations[id];
     const allySupport = allianceMembers(s, id).length;
     return (
-      ((20 + Math.sqrt(before[id]) * 2) *
+      ((20 + Math.sqrt(productiveBefore[id]) * 2) *
         (n.efficiency / 100) *
         (1 +
           technologyBonus(n, "offense") +
@@ -1431,7 +1475,8 @@ export function tick(s) {
     }
     considerSettlement(s, a, b, started, before);
   }
-  const after = stats(s);
+  const after = stats(s),
+    productiveAfter = productiveTerritory(s);
   for (const n of s.nations) {
     const id = n.id;
     if (!after[id]) {
@@ -1445,7 +1490,7 @@ export function tick(s) {
     n.income = Number(
       (
         1 +
-        Math.sqrt(after[id]) *
+        Math.sqrt(productiveAfter[id]) *
           (0.22 +
             technologyBonus(n, "economy") +
             governmentBonus(n, "economy")) -
@@ -1472,9 +1517,9 @@ export function tick(s) {
               (68 - n.stability) * 0.04),
       ),
     );
-    n.population = after[id] * 300;
+    n.population = Math.round(productiveAfter[id] * 300);
     n.peak = Math.max(n.peak, after[id]);
-    research(s, n, after[id]);
+    research(s, n, productiveAfter[id]);
     if (
       s.settings.revolts &&
       !s.wars.length &&

@@ -6,6 +6,8 @@ import {
   colors,
   createWorld,
   stats,
+  fertilityAt,
+  productiveTerritory,
   declareWar,
   peace,
   ally,
@@ -68,6 +70,7 @@ let toastTimer,
   showLabels = true,
   showEffects = true;
 let counts = [],
+  productive = [],
   landCount = 0,
   labelPositions = [],
   borderLines = [],
@@ -99,8 +102,16 @@ function view() {
     y: (ch - H * scale) / 2 + pan.y - 8,
   };
 }
-function mapColor(id, height) {
+function fertilityColor(fertility) {
+  if (fertility < 0.12) return "#765c50";
+  if (fertility < 0.28) return "#a17c5d";
+  if (fertility < 0.48) return "#c2a966";
+  if (fertility < 0.72) return "#9ab56b";
+  return "#4f925e";
+}
+function mapColor(id, height, cell) {
   if (id === WATER) return "#20384c";
+  if (layer === "fertility") return fertilityColor(fertilityAt(world, cell));
   if (id === NEUTRAL) return layer === "terrain" ? "#82936d" : "#637063";
   if (layer === "terrain")
     return height > 0.28 ? "#a9a78b" : height > 0.14 ? "#7d946e" : "#97ab7c";
@@ -114,6 +125,7 @@ function mapColor(id, height) {
 }
 function rebuildMap() {
   counts = stats(world);
+  productive = productiveTerritory(world);
   landCount = world.owner.filter((n) => n !== WATER).length;
   const pixels = pixelCtx.createImageData(W, H),
     sums = world.nations.map(() => ({ x: 0, y: 0 }));
@@ -124,7 +136,7 @@ function rebuildMap() {
     const id = world.owner[i],
       x = i % W,
       y = Math.floor(i / W);
-    const rgb = mapColor(id, world.terrain[i])
+    const rgb = mapColor(id, world.terrain[i], i)
       .match(/[a-f\d]{2}/gi)
       .map((v) => parseInt(v, 16));
     const shade =
@@ -445,7 +457,7 @@ function renderDetail(force = false) {
       `<option value="${esc(faith)}" ${faith === n.religion ? "selected" : ""}>${esc(faith)}</option>`,
   ).join("");
   const techMarkup = `<div class="tech-card"><div class="tech-heading">TECHNOLOGY · ${esc(technologyName(n))}</div><div class="tech-progress"><div style="width:${Math.min(100, (tech.progress / TECH_PROGRESS_REQUIRED) * 100)}%"></div></div><p>${tech.unlocked.length} discoveries · ${nextTech ? `Researching ${esc(nextTech.name)}` : tech.age < TECHNOLOGY_AGES.length - 1 ? "A new age of scholarship is within reach" : "All known technologies mastered"}</p><small>${currentAge.technologies.map((t) => `${tech.unlocked.includes(t.id) ? "✓" : "·"} ${esc(t.name)}`).join(" · ")}</small></div>`;
-  detail.innerHTML = `<div class="detail-top">NATION INSPECTOR <button id="close-detail" aria-label="Close nation inspector">×</button></div><div class="detail-title"><span class="flag" style="background:${n.color}"></span><h2>${esc(n.name)}</h2></div><div class="detail-status">${alive ? (enemies.length ? "⚔ AT WAR · " + enemies.length + " FRONT" + (enemies.length > 1 ? "S" : "") : "● AT PEACE") : "FALLEN NATION"} · FOUNDED YEAR ${n.born}<br>CAPITAL REGION · ${esc(capitalRegion(world, n.capital).label)}<br>${esc(governmentName(n))} · ${esc(n.religion)}</div>${techMarkup}<div class="metrics"><div><label>Territory</label><strong>${compact(counts[selected])} <small>tiles</small></strong></div><div><label>Gold <small>(${(n.income || 0) >= 0 ? "+" : ""}${n.income || 0}/yr)</small></label><strong>${compact(Math.floor(n.wealth))}</strong></div><div><label>Combat efficiency</label><strong>${Math.round(n.efficiency)}<small>%</small></strong><div class="stat-bar"><div style="width:${Math.min(100, n.efficiency / 1.5)}%"></div></div></div><div><label>Stability</label><strong>${Math.round(n.stability)}<small>%</small></strong><div class="stat-bar"><div style="width:${n.stability}%;background:${n.stability < 40 ? "#ed827e" : "#8ed8b1"}"></div></div></div></div><div class="relations"><b>Allies:</b> ${esc(allies.join(", ") || "None")}<br><b>Enemies:</b> ${esc(enemies.join(", ") || "None")}</div><div class="god-heading">GOD MODE <span>${n.kills} CONQUESTS</span></div><div class="actions"><button data-action="gold" ${!alive ? "disabled" : ""}>＋ 500 gold</button><button data-action="peace" ${!enemies.length ? "disabled" : ""}>☮ Make peace</button><button data-action="rebel" ${counts[selected] < 30 ? "disabled" : ""}>⚡ Revolt</button><button data-action="follow" ${!alive ? "disabled" : ""}>⌖ Find capital</button></div><select id="rival" class="diplomacy-select" aria-label="Target nation">${world.nations
+  detail.innerHTML = `<div class="detail-top">NATION INSPECTOR <button id="close-detail" aria-label="Close nation inspector">×</button></div><div class="detail-title"><span class="flag" style="background:${n.color}"></span><h2>${esc(n.name)}</h2></div><div class="detail-status">${alive ? (enemies.length ? "⚔ AT WAR · " + enemies.length + " FRONT" + (enemies.length > 1 ? "S" : "") : "● AT PEACE") : "FALLEN NATION"} · FOUNDED YEAR ${n.born}<br>CAPITAL REGION · ${esc(capitalRegion(world, n.capital).label)}<br>${esc(governmentName(n))} · ${esc(n.religion)}</div>${techMarkup}<div class="metrics"><div><label>Territory</label><strong>${compact(counts[selected])} <small>tiles</small></strong></div><div><label>Productive land</label><strong>${productive[selected].toFixed(1)} <small>yield tiles</small></strong></div><div><label>Gold <small>(${(n.income || 0) >= 0 ? "+" : ""}${n.income || 0}/yr)</small></label><strong>${compact(Math.floor(n.wealth))}</strong></div><div><label>Combat efficiency</label><strong>${Math.round(n.efficiency)}<small>%</small></strong><div class="stat-bar"><div style="width:${Math.min(100, n.efficiency / 1.5)}%"></div></div></div><div><label>Stability</label><strong>${Math.round(n.stability)}<small>%</small></strong><div class="stat-bar"><div style="width:${n.stability}%;background:${n.stability < 40 ? "#ed827e" : "#8ed8b1"}"></div></div></div></div><div class="relations"><b>Allies:</b> ${esc(allies.join(", ") || "None")}<br><b>Enemies:</b> ${esc(enemies.join(", ") || "None")}</div><div class="god-heading">GOD MODE <span>${n.kills} CONQUESTS</span></div><div class="actions"><button data-action="gold" ${!alive ? "disabled" : ""}>＋ 500 gold</button><button data-action="peace" ${!enemies.length ? "disabled" : ""}>☮ Make peace</button><button data-action="rebel" ${counts[selected] < 30 ? "disabled" : ""}>⚡ Revolt</button><button data-action="follow" ${!alive ? "disabled" : ""}>⌖ Find capital</button></div><select id="rival" class="diplomacy-select" aria-label="Target nation">${world.nations
     .filter((m) => m.id !== selected && counts[m.id])
     .map((m) => `<option value="${m.id}">${esc(m.name)}</option>`)
     .join(
@@ -1187,6 +1199,7 @@ $$("[data-layer]").forEach(
     (b.onclick = () => {
       layer = b.dataset.layer;
       $$("[data-layer]").forEach((x) => x.classList.toggle("active", x === b));
+      $(".map-key").classList.toggle("fertility", layer === "fertility");
       if (layer === "diplomacy" && selected === null)
         toast("Select a nation to see its allies and enemies.");
       rebuildMap();

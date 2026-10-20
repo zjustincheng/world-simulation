@@ -4,6 +4,8 @@ import {
   createWorld,
   tick,
   stats,
+  fertilityAt,
+  productiveTerritory,
   declareWar,
   peace,
   ally,
@@ -46,6 +48,20 @@ test("settlements grow into neutral land and do not turn water into territory", 
   assert.ok(owned(s) > before * 3);
   water.forEach((i) => assert.equal(s.owner[i], WATER));
   validate(s);
+});
+
+test("cold land contributes far less productive territory than fertile land", () => {
+  const s = createWorld("fertility", 0, "blank"),
+    coldCenter = 5 * W + 40,
+    fertileCenter = 50 * W + 110;
+  paint(s, coldCenter, 3, "land");
+  const cold = spawnNation(s, coldCenter, { radius: 3 });
+  paint(s, fertileCenter, 3, "land");
+  const fertile = spawnNation(s, fertileCenter, { radius: 3 });
+  assert.ok(fertilityAt(s, coldCenter) < 0.15);
+  assert.ok(fertilityAt(s, fertileCenter) > 0.5);
+  const productivity = productiveTerritory(s);
+  assert.ok(productivity[fertile] > productivity[cold] * 3);
 });
 
 test("four centuries of conflict conserve land and keep valid nations and relations", () => {
@@ -122,6 +138,8 @@ test("peace terms absorb a conquered nation left with only a few tiles", () => {
 test("campaigns do not leave detached territory pockets surrounded by one victor", () => {
   const s = createWorld("coherent-fronts", 2, "pangaea");
   s.settings.expansion = false;
+  s.settings.revolts = false;
+  s.settings.wars = false;
   assert.equal(declareWar(s, 0, 1, { reason: "a contested frontier" }), true);
   for (let year = 0; year < 120; year++) {
     tick(s);
@@ -189,6 +207,16 @@ test("an alliance supports its member without opening a second war", () => {
   assert.deepEqual(s.warHistory[0].alliesB, [2, 3]);
   assert.match(s.warHistory[0].reason, /enter the campaign in support/);
   assert.equal(declareWar(s, 2, 0), false);
+  validate(s);
+});
+
+test("diplomacy cannot link active war opponents through a new alliance", () => {
+  const s = createWorld("no-cross-war-pacts", 3, "arena");
+  assert.equal(ally(s, 0, 2), true);
+  assert.equal(declareWar(s, 0, 1, { reason: "a contested frontier" }), true);
+  assert.equal(ally(s, 1, 2), false);
+  assert.equal(allied(s, 0, 1), false);
+  assert.equal(s.wars.length, 1);
   validate(s);
 });
 
