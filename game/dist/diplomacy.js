@@ -98,7 +98,7 @@ export function diplomacyTick(s, borders, coasts, sizes) {
   for (let id = 0; id < sizes.length; id++) {
     if (!sizes[id] || !coasts[id]?.length) continue;
     const landingCounts = new Map();
-    for (const cell of nearbySeaLandings(s, id, null, coasts[id])) {
+    for (const cell of nearbySeaLandings(s, id, null, coasts[id], true)) {
       const other = s.owner[cell];
       const key = keyOf(id, other);
       landingCounts.set(key, (landingCounts.get(key) || 0) + 1);

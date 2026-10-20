@@ -32,6 +32,17 @@ test("nearby sea routes allow four water tiles, reject five, and choose the near
   const nearest = islandWorld([[10], [13], [15]]);
   assert.deepEqual(nearbySeaLandings(nearest, 0), [cell(13)]);
 });
+test("diplomacy can see every reachable shore beyond the nearest landing", () => {
+  const s = islandWorld([[10], [15], [30], [34]]);
+  spawnNation(s, cell(15), { radius: 0 });
+  spawnNation(s, cell(34), { radius: 0 });
+  s.owner[cell(30)] = 0;
+  assert.deepEqual(nearbySeaLandings(s, 0, null), [cell(34)]);
+  assert.deepEqual(
+    nearbySeaLandings(s, 0, null, null, true).sort((a, b) => a - b),
+    [cell(15), cell(34)],
+  );
+});
 test("sea routes cannot pass through land, cross disconnected water or wrap map edges", () => {
   const blocked = islandWorld([[10], [14]]);
   for (let y = 0; y < H; y++) {

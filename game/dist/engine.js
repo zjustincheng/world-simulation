@@ -1037,7 +1037,13 @@ export function paint(s, cell, radius, mode, nation = null) {
 export const MAX_SEA_CROSSING = 4;
 // Find the closest shore through water only. Land blocks the route, and the
 // search never wraps map edges or treats a straight line over land as a voyage.
-export function nearbySeaLandings(s, nation, target = NEUTRAL, origins = null) {
+export function nearbySeaLandings(
+  s,
+  nation,
+  target = NEUTRAL,
+  origins = null,
+  allReachable = false,
+) {
   const coast =
     origins ||
     s.owner.map((id, i) => (id === nation ? i : -1)).filter((i) => i >= 0);
@@ -1056,13 +1062,13 @@ export function nearbySeaLandings(s, nation, target = NEUTRAL, origins = null) {
   let closest = MAX_SEA_CROSSING + 1;
   for (let head = 0; head < queue.length; head++) {
     const [cell, waterTiles] = queue[head];
-    if (waterTiles > closest) break;
+    if (!allReachable && waterTiles > closest) break;
     for (const next of neighbors(cell)) {
       const owner = s.owner[next];
       if (owner === WATER) {
         if (
           waterTiles < MAX_SEA_CROSSING &&
-          waterTiles < closest &&
+          (allReachable || waterTiles < closest) &&
           !seen.has(next)
         ) {
           seen.add(next);
@@ -1071,7 +1077,7 @@ export function nearbySeaLandings(s, nation, target = NEUTRAL, origins = null) {
       } else if (
         target === null ? owner >= 0 && owner !== nation : owner === target
       ) {
-        closest = waterTiles;
+        if (!allReachable) closest = waterTiles;
         results.add(next);
       }
     }
