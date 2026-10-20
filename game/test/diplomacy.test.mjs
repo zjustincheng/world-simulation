@@ -7,6 +7,9 @@ import {
   declareWar,
   peace,
   ally,
+  paint,
+  spawnNation,
+  nearbySeaLandings,
   hasTruce,
   rebel,
   allianceMembers,
@@ -38,6 +41,29 @@ test("ordinary connected worlds can escalate disputes into wars", () => {
   const s = createWorld("USER-TEST-0", 8, "continents", "borders");
   for (let i = 0; i < 250 && !s.warHistory.length; i++) tick(s);
   assert.ok(s.warHistory.length > 0);
+});
+test("nearby island nations can escalate a maritime dispute into an invasion", () => {
+  const s = createWorld("island-diplomacy", 0, "blank", "empty"),
+    west = 50 * 160 + 70,
+    east = 50 * 160 + 88;
+  paint(s, west, 8, "land");
+  paint(s, east, 8, "land");
+  assert.equal(spawnNation(s, west, { radius: 8, name: "West Isle" }), 0);
+  assert.equal(spawnNation(s, east, { radius: 8, name: "East Isle" }), 1);
+  s.settings.expansion = false;
+  s.settings.revolts = false;
+  s.settings.alliances = false;
+  for (const nation of s.nations) {
+    nation.aggression = 0.95;
+    nation.wealth = 500;
+    nation.stability = 90;
+  }
+  assert.ok(nearbySeaLandings(s, 0, 1).length > 0);
+  assert.ok(nearbySeaLandings(s, 1, 0).length > 0);
+  for (let i = 0; i < 100 && !s.warHistory.length; i++) tick(s);
+  assert.ok(s.warHistory.length > 0);
+  assert.match(s.warHistory[0].reason, /sea lanes and island approaches/);
+  validate(s);
 });
 test("automatically placed pangaea nations fight and face domestic revolts over centuries", () => {
   const s = createWorld("USER-TEST", 0, "pangaea", "empty");

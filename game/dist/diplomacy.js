@@ -91,6 +91,21 @@ export function settleRelation(s, a, b) {
 }
 export function diplomacyTick(s, borders, coasts, sizes) {
   s.relations ||= {};
+  // A short, navigable sea route acts like a strategic maritime frontier.
+  // Build contacts once per country so island states can enter diplomacy
+  // without making every overseas nation a potential target.
+  const seaContacts = new Map();
+  for (let id = 0; id < sizes.length; id++) {
+    if (!sizes[id] || !coasts[id]?.length) continue;
+    const landingCounts = new Map();
+    for (const cell of nearbySeaLandings(s, id, null, coasts[id])) {
+      const other = s.owner[cell];
+      const key = keyOf(id, other);
+      landingCounts.set(key, (landingCounts.get(key) || 0) + 1);
+    }
+    for (const [key, count] of landingCounts)
+      seaContacts.set(key, (seaContacts.get(key) || 0) + count);
+  }
   const balance = balanceOfPower(s, borders, sizes);
   // Defensive compacts should outlast the crisis that created them, not freeze
   // the map forever. Let them lapse after a generation without a shared enemy.
@@ -149,20 +164,17 @@ export function diplomacyTick(s, borders, coasts, sizes) {
       }
     }
   }
-  const candidates = new Set(borders.keys());
+  const candidates = new Set([...borders.keys(), ...seaContacts.keys()]);
   // Historical claims can concern nearby islands, but never unreachable overseas rivals.
   for (const [key, r] of Object.entries(s.relations))
     if (
       !candidates.has(key) &&
       r.claims.some(Boolean) &&
       sizes[r.a] &&
-      sizes[r.b]
+      sizes[r.b] &&
+      seaContacts.has(key)
     ) {
-      if (
-        nearbySeaLandings(s, r.a, r.b, coasts[r.a]).length ||
-        nearbySeaLandings(s, r.b, r.a, coasts[r.b]).length
-      )
-        candidates.add(key);
+      candidates.add(key);
     }
   for (const [key, r] of Object.entries(s.relations))
     if (!candidates.has(key)) r.tension = Math.max(0, r.tension - 5);
@@ -229,6 +241,14 @@ export function diplomacyTick(s, borders, coasts, sizes) {
             const target = challenger === a ? b : a;
             r.reason = `${s.nations[challenger].name} demands recognition of a changed military balance as its strength has risen sharply relative to ${s.nations[target].name} along their shared frontier`;
           }
+        } else if (
+          (seaContacts.get(key) || 0) >= 1 &&
+          Math.max(A.aggression, B.aggression) >= 0.78 &&
+          Math.min(A.wealth, B.wealth) >= 60
+        ) {
+          r.initiator = A.aggression >= B.aggression ? a : b;
+          const target = r.initiator === a ? b : a;
+          r.reason = `${s.nations[r.initiator].name} contests ${s.nations[target].name}'s control of nearby sea lanes and island approaches`;
         }
       }
       if (!r.reason) {
